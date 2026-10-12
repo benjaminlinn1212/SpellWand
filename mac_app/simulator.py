@@ -159,17 +159,6 @@ def simulated_motion(name, rng):
     raise ValueError(f"the simulator cannot perform {name!r}; try one of {GESTURES + OTHER_MOTIONS}")
 
 
-# The firmware's built-in spell colours (firmware/lib/wand_core/wand_state.h), used when
-# GESTURE_RESULT carries 0,0,0.
-BUILT_IN_COLOURS = {
-    "CIRCLE": (0, 80, 255),
-    "ZIGZAG": (255, 64, 0),
-    "HORIZONTAL_LINE": (0, 200, 40),
-    "UNKNOWN": (255, 0, 0),
-}
-OTHER_SPELL_COLOUR = (180, 180, 180)
-
-
 class SimulatedWand:
     """Pretends to be the ESP32 over BLE_LINK: same states, same message bytes.
 
@@ -223,8 +212,8 @@ class SimulatedWand:
                 if not self.realtime:
                     self._end(END_NORMAL)
             elif isinstance(command, GestureResult) and self.state == "INFLIGHT":
-                rgb = command.rgb if any(command.rgb) else BUILT_IN_COLOURS.get(command.label, OTHER_SPELL_COLOUR)
-                self.feedback_log.append((command.label, rgb))
+                # Like the firmware: show the Mac's colour as sent (spell colours live only in config.json).
+                self.feedback_log.append((command.label, command.rgb))
                 self.state = "IDLE"
             elif isinstance(command, ExecuteAction):
                 ok = command.action in (ACTION_TOGGLE_LED, ACTION_PULSE_LED)

@@ -35,7 +35,9 @@ real data in `mac_app/data/` and `mac_app/config.json` are never touched. Delete
 | Action LED (demo output) | GPIO 26 → 330 Ω resistor → LED → GND |
 
 `STATUS_LED` colours: dim white `IDLE`, blue `CASTING`, amber `INFLIGHT` (waiting for the Mac), then the
-spell colour for 1 s, three red flashes for `UNKNOWN`, or two magenta flashes if the Mac didn't answer within 2 s.
+spell colour for 1 s, three flashes of the `UNKNOWN` colour (red by default), or two magenta flashes if the
+Mac didn't answer within 2 s. Spell colours (including `UNKNOWN`) are set only in the SpellWand UI
+(`config.json`) and sent with each result; the wand itself only knows its state colours.
 
 ## Setup
 

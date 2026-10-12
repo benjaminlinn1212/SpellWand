@@ -10,21 +10,14 @@ enum class WandState : uint8_t { IDLE, CASTING, INFLIGHT };
 
 const char* stateName(WandState state);
 
+// Colours for the wand's own states. Spell colours are not here: they live only in the
+// Mac's config.json and arrive with each GESTURE_RESULT.
 namespace colors {
 const Rgb IDLE = {8, 8, 8};          // dim white
 const Rgb CASTING = {0, 0, 255};     // blue
 const Rgb INFLIGHT = {255, 150, 0};  // amber: waiting for the Mac
 const Rgb NO_ANSWER = {255, 0, 255}; // magenta flashes: no GESTURE_RESULT arrived
-// The wand's own spell colours, used when GESTURE_RESULT carries 0,0,0.
-const Rgb CIRCLE = {0, 80, 255};
-const Rgb ZIGZAG = {255, 64, 0};
-const Rgb HORIZONTAL_LINE = {0, 200, 40};
-const Rgb UNKNOWN = {255, 0, 0};
-const Rgb OTHER_SPELL = {180, 180, 180};
 }  // namespace colors
-
-// Built-in colour for a GestureLabel.
-Rgb spellColor(const char* label);
 
 // What the state machine asks the rest of the firmware to send over BLE_LINK.
 class WandEvents {
@@ -48,7 +41,7 @@ class WandStateMachine {
   void buttonChanged(bool pressed, uint32_t now);  // debounced CAST_BUTTON
   void startRecording(uint32_t now);               // START_RECORDING from the Mac
   void stopRecording(uint32_t now);                // STOP_RECORDING from the Mac
-  void gestureResult(const char* label, Rgb color, uint32_t now);
+  void gestureResult(const char* label, Rgb color, uint32_t now);  // shows `color` as sent
   void connectionLost(uint32_t now);
   void tick(uint32_t now);  // call every loop: handles timeouts and ends feedback
 

@@ -51,7 +51,7 @@ size_t encodeActionComplete(uint8_t* out, uint8_t action, bool ok);
 
 struct Command {
   uint8_t type;
-  Rgb color;                         // GESTURE_RESULT
+  Rgb color;                         // GESTURE_RESULT: spell colour from the Mac's config.json
   char label[MAX_LABEL_LENGTH + 1];  // GESTURE_RESULT, null-terminated
   uint8_t action;                    // EXECUTE_ACTION
 };

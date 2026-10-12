@@ -194,26 +194,28 @@ static void test_result_shows_spell_color_then_returns_to_idle() {
   assertColor(colors::IDLE, wand.ledColor(900 + WandStateMachine::SPELL_SHOW_MS));
 }
 
-static void test_black_color_means_use_the_wands_own_spell_color() {
+// Spell colours live only in the Mac's config.json: the wand has none of its own.
+static void test_wand_shows_exactly_the_colour_the_mac_sends() {
   RecordedEvents events;
   WandStateMachine wand(events);
   wand.buttonChanged(true, 0);
   wand.buttonChanged(false, 800);
-  wand.gestureResult("ZIGZAG", OFF, 900);
-  assertColor(colors::ZIGZAG, wand.ledColor(900));
+  wand.gestureResult("ZIGZAG", OFF, 900);  // even black: no built-in fallback
+  assertColor(OFF, wand.ledColor(900));
 }
 
-static void test_unknown_flashes_red_three_times_then_idle() {
+static void test_unknown_flashes_the_macs_colour_three_times_then_idle() {
   RecordedEvents events;
   WandStateMachine wand(events);
   wand.buttonChanged(true, 0);
   wand.buttonChanged(false, 800);
-  wand.gestureResult("UNKNOWN", OFF, 1000);
+  const Rgb cyan = {0, 255, 255};  // not red, so a built-in colour can't pass this test
+  wand.gestureResult("UNKNOWN", cyan, 1000);
   const uint32_t f = WandStateMachine::FLASH_MS;
-  assertColor(colors::UNKNOWN, wand.ledColor(1000));          // flash 1 on
-  assertColor(OFF, wand.ledColor(1000 + f));                  // off
-  assertColor(colors::UNKNOWN, wand.ledColor(1000 + 2 * f));  // flash 2 on
-  assertColor(colors::UNKNOWN, wand.ledColor(1000 + 4 * f));  // flash 3 on
+  assertColor(cyan, wand.ledColor(1000));          // flash 1 on
+  assertColor(OFF, wand.ledColor(1000 + f));       // off
+  assertColor(cyan, wand.ledColor(1000 + 2 * f));  // flash 2 on
+  assertColor(cyan, wand.ledColor(1000 + 4 * f));  // flash 3 on
   assertColor(OFF, wand.ledColor(1000 + 5 * f));
   wand.tick(1000 + 6 * f - 1);
   TEST_ASSERT_EQUAL(WandState::INFLIGHT, wand.state());
@@ -346,8 +348,8 @@ int main() {
   RUN_TEST(test_release_ends_cast_and_waits_for_result_in_amber);
   RUN_TEST(test_next_cast_numbers_samples_from_zero_again);
   RUN_TEST(test_result_shows_spell_color_then_returns_to_idle);
-  RUN_TEST(test_black_color_means_use_the_wands_own_spell_color);
-  RUN_TEST(test_unknown_flashes_red_three_times_then_idle);
+  RUN_TEST(test_wand_shows_exactly_the_colour_the_mac_sends);
+  RUN_TEST(test_unknown_flashes_the_macs_colour_three_times_then_idle);
   RUN_TEST(test_no_answer_flashes_magenta_then_idle);
   RUN_TEST(test_cast_stops_at_maximum_duration_and_late_release_is_ignored);
   RUN_TEST(test_button_is_ignored_while_inflight);

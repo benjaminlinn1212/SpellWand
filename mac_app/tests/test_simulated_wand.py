@@ -55,10 +55,13 @@ class SimulatedWandTest(unittest.TestCase):
         self.assertEqual(self.wand.feedback_log, [("ZIGZAG", (10, 20, 30))])
         self.assertEqual(self.wand.state, "IDLE")
 
-    def test_black_colour_uses_the_wands_built_in_colour(self):
+    def test_wand_shows_exactly_the_colour_the_mac_sends(self):
+        # Spell colours live only in the Mac's config.json; the wand has none of its own.
+        self.wand.cast("CIRCLE")
+        self.wand.send(encode_gesture_result("CIRCLE", (0, 0, 0)))
         self.wand.cast("ZIGZAG")
-        self.wand.send(encode_gesture_result("UNKNOWN", (0, 0, 0)))
-        self.assertEqual(self.wand.feedback_log, [("UNKNOWN", (255, 0, 0))])
+        self.wand.send(encode_gesture_result("UNKNOWN", (0, 255, 255)))
+        self.assertEqual(self.wand.feedback_log, [("CIRCLE", (0, 0, 0)), ("UNKNOWN", (0, 255, 255))])
 
     def test_cast_is_refused_while_waiting_for_a_result(self):
         self.wand.cast("CIRCLE")

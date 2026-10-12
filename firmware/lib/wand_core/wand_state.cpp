@@ -11,14 +11,6 @@ const char* stateName(WandState state) {
   return "?";
 }
 
-Rgb spellColor(const char* label) {
-  if (strcmp(label, "CIRCLE") == 0) return colors::CIRCLE;
-  if (strcmp(label, "ZIGZAG") == 0) return colors::ZIGZAG;
-  if (strcmp(label, "HORIZONTAL_LINE") == 0) return colors::HORIZONTAL_LINE;
-  if (strcmp(label, "UNKNOWN") == 0) return colors::UNKNOWN;
-  return colors::OTHER_SPELL;
-}
-
 void WandStateMachine::buttonChanged(bool pressed, uint32_t now) {
   if (pressed && state_ == WandState::IDLE) {
     beginCast(protocol::SOURCE_CAST_BUTTON, now);
@@ -39,7 +31,7 @@ void WandStateMachine::stopRecording(uint32_t now) {
 
 void WandStateMachine::gestureResult(const char* label, Rgb color, uint32_t now) {
   if (state_ != WandState::INFLIGHT || feedbackActive_) return;  // late or unexpected
-  if (isBlack(color)) color = spellColor(label);
+  // The colour comes from the Mac; the wand only decides the pattern (flashes for UNKNOWN).
   bool unknown = strcmp(label, "UNKNOWN") == 0;
   showFeedback(color, unknown ? 3 : 0, now);
 }

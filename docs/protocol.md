@@ -34,7 +34,7 @@ accelerometer and ±32.767 rad/s (about 1877 °/s) for the gyroscope.
 |---|---|---|---|
 | `0x81` | `START_RECORDING` | none | 1 |
 | `0x82` | `STOP_RECORDING` | none | 1 |
-| `0x83` | `GESTURE_RESULT` | r g b `u8` (spell colour from `config.json`; 0 0 0 = use the wand's built-in colour), then the `GestureLabel` in ASCII, 1–16 characters | 5–20 |
+| `0x83` | `GESTURE_RESULT` | r g b `u8`: the spell colour, shown exactly as sent; then the `GestureLabel` in ASCII, 1–16 characters | 5–20 |
 | `0x84` | `EXECUTE_ACTION` | action `u8`: 1 = toggle the action LED, 2 = pulse the action LED for 0.5 s | 2 |
 
 ## Typical exchanges
@@ -45,11 +45,15 @@ Casting (button):
 ESP32: CAST_START(source=0)            state IDLE -> CASTING, LED blue
 ESP32: MOTION_SAMPLE x N (about 100 Hz)
 ESP32: CAST_END(count=N, reason=0)     state CASTING -> INFLIGHT, LED amber
-Mac:   GESTURE_RESULT(colour, "CIRCLE")  LED shows the spell colour (red flashes for UNKNOWN)
+Mac:   GESTURE_RESULT(colour, "CIRCLE")  LED shows that colour (three flashes of it for UNKNOWN)
                                        state INFLIGHT -> IDLE after the feedback
 Mac:   EXECUTE_ACTION(1)               (only if the gesture is mapped to the wand's action LED)
 ESP32: ACTION_COMPLETE(1, ok=1)
 ```
+
+**Spell colours have one home: the Mac's `config.json`** (edited in the SpellWand UI, including the
+colour for `UNKNOWN`). The wand has no spell colours of its own; it only owns the colours of its states
+(dim white `IDLE`, blue `CASTING`, amber `INFLIGHT`, magenta "no answer") and the flash pattern.
 
 If no `GESTURE_RESULT` arrives within 2 s, the wand flashes magenta ("no answer") and returns to `IDLE`.
 
