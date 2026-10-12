@@ -1,0 +1,10 @@
+# macOS
+.DS_Store
+
+# Python (mac_app)
+__pycache__/
+*.pyc
+.venv/
+
+# PlatformIO build output (firmware/.gitignore covers the rest)
+.pio/
