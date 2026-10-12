@@ -27,12 +27,30 @@ cd firmware
 ~/.platformio/penv/bin/pio run -t upload -t monitor  # flash and open serial monitor (115200 baud)
 ```
 
+## Mac app
+
+Needs Python 3.13 from python.org (`/usr/local/bin/python3.13`).
+
+```bash
+cd mac_app
+/usr/local/bin/python3.13 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python ble_manager.py   # 5-second BLE scan
+```
+
+**Bluetooth permission:** macOS only lets a program use Bluetooth if the app that launched it
+declares Bluetooth use. Run BLE code from VS Code's terminal or the Claude desktop app's Terminal panel
+and click **Allow** when asked. Running it from Claude Code's command runner, or from another app
+without that declaration, makes Python crash immediately with exit code 134
+(SIGABRT, `NSBluetoothAlwaysUsageDescription` in the crash report).
+
 ## Progress
 
 - [x] PlatformIO project compiles (boot banner + heartbeat)
 - [ ] IMU readings on the serial monitor (code compiles; needs hardware test)
 - [ ] `CAST_BUTTON` and the three operating states
 - [ ] `STATUS_LED`
+- [x] Mac Python environment; Bleak BLE scan works
 - [ ] `BLE_LINK`
 - [ ] `Sample Recorder`
 - [ ] DTW `Gesture Classifier` with rejection
