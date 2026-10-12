@@ -121,25 +121,37 @@ class PreprocessingTest(unittest.TestCase):
         self.clf = GestureClassifier(threshold=10.0)
         self.clf.fit(three_axis_examples())
 
-    def test_tilted_wand_still_matches(self):
-        # Same flick-and-push, but the wand is held tilted 25 degrees, so gravity
-        # shows up partly on the y axis instead of only on z.
-        def flick(gravity):
-            imu = np.zeros((N_SAMPLES, 6))
-            imu[:, 0:3] = gravity
-            imu[:, 0] += bump(amplitude=5.0)
-            imu[:, 4] = bump()
-            return GestureSequence(t_ms=np.linspace(0, 1000, N_SAMPLES), imu=imu)
+    def test_same_swing_with_wand_rolled_30_degrees_still_matches(self):
+        # A sideways swing: the wand turns about its own z axis at gz = A sin(pi t),
+        # so by time t it has turned psi(t) = (A / pi) (1 - cos(pi t)) radians.
+        # The accelerometer only feels gravity (no other push), seen in the wand's axes.
+        # Held level, gravity stays on z. Rolled 30 degrees, gravity swings between the
+        # axes as the wand turns, which must not make it look like a different gesture.
+        amplitude = 1.5
+        t = np.linspace(0.0, 1.0, N_SAMPLES)
+        psi = amplitude / np.pi * (1 - np.cos(np.pi * t))
+        roll = math.radians(30)
 
-        level = flick([0.0, 0.0, 9.81])
-        level.label = "FLICK"
-        tilted = flick([0.0, 9.81 * math.sin(math.radians(25)), 9.81 * math.cos(math.radians(25))])
+        def swing(gravity_in_wand):
+            imu = np.zeros((N_SAMPLES, 6))
+            imu[:, 0:3] = gravity_in_wand
+            imu[:, 5] = amplitude * np.sin(np.pi * t)
+            return GestureSequence(t_ms=1000 * t, imu=imu)
+
+        # Gravity in wand axes = (rotation by roll about x, then psi about z) transposed, times (0, 0, g).
+        level = swing(np.column_stack([np.zeros_like(t), np.zeros_like(t), np.full_like(t, 9.81)]))
+        level.label = "SWING"
+        rolled = swing(9.81 * np.column_stack([
+            math.sin(roll) * np.sin(psi),
+            math.sin(roll) * np.cos(psi),
+            np.full_like(t, math.cos(roll)),
+        ]))
 
         clf = GestureClassifier(threshold=1.0)
         clf.fit([level])
-        result = clf.classify(tilted)
-        self.assertEqual(result.label, "FLICK")
-        self.assertAlmostEqual(result.distance, 0.0, places=6)
+        result = clf.classify(rolled)
+        self.assertEqual(result.label, "SWING")
+        self.assertLess(result.distance, 0.01)
 
     def test_same_gesture_done_slower_matches_closely(self):
         # Three times as long, three times as many samples, same shape.

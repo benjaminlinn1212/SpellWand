@@ -8,6 +8,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from motion_trace import gravity_in_wand
+
 UNKNOWN = "UNKNOWN"
 RESAMPLE_LENGTH = 40       # every gesture is stretched or squeezed to this many points
 MIN_SAMPLES = 10           # anything shorter (0.1 s at 100 Hz) is not a gesture
@@ -83,11 +85,12 @@ class GestureClassifier:
 def preprocess(sequence, length=RESAMPLE_LENGTH):
     """Turn a GestureSequence into a (length x 6) array ready for DTW.
 
-    1. Resample onto `length` evenly spaced moments between the first and last
+    1. Subtract gravity from every accelerometer reading. Gravity only tells us how the
+       wand happened to be tilted, and as the wand turns it shifts between the axes,
+       which would make the same gesture look different at different tilts. We know
+       which way is down at each moment by following the gyro (see motion_trace.py).
+    2. Resample onto `length` evenly spaced moments between the first and last
        timestamp, so fast and slow casts line up point by point.
-    2. Subtract the average acceleration. A gesture starts and ends at rest, so the
-       wand's real acceleration averages out to about zero; what remains is gravity,
-       which only tells us how the wand happened to be tilted.
     3. Convert to g and half-turns per second, where a typical gesture is about the
        same size on both sensors, so neither one drowns out the other.
     4. Scale the whole gesture to overall size 1, so big and small, fast and slow
@@ -95,10 +98,10 @@ def preprocess(sequence, length=RESAMPLE_LENGTH):
        scaling would blow a tiny twitch up into a full-size shape.)
     """
     t = np.asarray(sequence.t_ms, dtype=float)
-    imu = np.asarray(sequence.imu, dtype=float)
+    imu = np.array(sequence.imu, dtype=float)  # a copy, so the caller's data is untouched
+    imu[:, 0:3] -= gravity_in_wand(sequence)
     new_t = np.linspace(t[0], t[-1], length)
     resampled = np.column_stack([np.interp(new_t, t, imu[:, k]) for k in range(imu.shape[1])])
-    resampled[:, 0:3] -= resampled[:, 0:3].mean(axis=0)
     resampled[:, 0:3] /= ACCEL_UNIT
     resampled[:, 3:6] /= GYRO_UNIT
     size = _rms(resampled)

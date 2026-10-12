@@ -14,6 +14,7 @@ A handheld wand that recognizes air-drawn gestures and uses them to control devi
 | ESP32-WROOM-32 dev board | PlatformIO board `esp32dev` |
 | BNO086 IMU | I²C: SDA → GPIO 21, SCL → GPIO 22, 3.3 V, GND |
 | BNO086 INT / RST | INT → GPIO 4, RST → GPIO 23 (set to `-1` in `main.cpp` if not wired) |
+| BNO086 mounting | x axis along the wand toward the tip; y left and z up when the wand is held level (the Mac app assumes this) |
 | `CAST_BUTTON` | GPIO 27 → GND (internal pull-up) |
 | `STATUS_LED` (WS2812B) | Data in → GPIO 18 |
 
@@ -37,7 +38,12 @@ cd mac_app
 .venv/bin/python -m pip install -r requirements.txt
 .venv/bin/python ble_manager.py   # 5-second BLE scan
 .venv/bin/python -m unittest discover -s tests -v   # run the tests (no hardware needed)
+.venv/bin/python view_motion.py                     # list saved samples
+.venv/bin/python view_motion.py SAMPLE_ID           # show one in 3D in your browser
 ```
+
+Training samples are saved as CSV files in `mac_app/data/` (one row per `MotionSample`).
+See [docs/prior-work.md](docs/prior-work.md) for how other gesture wands work.
 
 **Bluetooth permission:** macOS only lets a program use Bluetooth if the app that launched it
 declares Bluetooth use. Run BLE code from VS Code's terminal or the Claude desktop app's Terminal panel
@@ -53,7 +59,8 @@ without that declaration, makes Python crash immediately with exit code 134
 - [ ] `STATUS_LED`
 - [x] Mac Python environment; Bleak BLE scan works
 - [ ] `BLE_LINK`
-- [ ] `Sample Recorder`
+- [x] `Sample Recorder` storage: save / load / list / delete CSV samples (live recording comes with `BLE_LINK`)
+- [x] 3D motion view of a sample (`view_motion.py`)
 - [x] DTW `Gesture Classifier` with rejection (tested on simulated gestures; needs real data to tune the threshold)
 - [ ] `GESTURE_RESULT` back to the wand + spell colors
 - [ ] Flask `SpellWand UI`
