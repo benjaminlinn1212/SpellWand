@@ -36,6 +36,7 @@ cd mac_app
 /usr/local/bin/python3.13 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 .venv/bin/python ble_manager.py   # 5-second BLE scan
+.venv/bin/python -m unittest discover -s tests -v   # run the tests (no hardware needed)
 ```
 
 **Bluetooth permission:** macOS only lets a program use Bluetooth if the app that launched it
@@ -53,7 +54,7 @@ without that declaration, makes Python crash immediately with exit code 134
 - [x] Mac Python environment; Bleak BLE scan works
 - [ ] `BLE_LINK`
 - [ ] `Sample Recorder`
-- [ ] DTW `Gesture Classifier` with rejection
+- [x] DTW `Gesture Classifier` with rejection (tested on simulated gestures; needs real data to tune the threshold)
 - [ ] `GESTURE_RESULT` back to the wand + spell colors
 - [ ] Flask `SpellWand UI`
 - [ ] End-to-end test
