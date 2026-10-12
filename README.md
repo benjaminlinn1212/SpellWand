@@ -13,6 +13,7 @@ A handheld wand that recognizes air-drawn gestures and uses them to control devi
 |---|---|
 | ESP32-WROOM-32 dev board | PlatformIO board `esp32dev` |
 | BNO086 IMU | I²C: SDA → GPIO 21, SCL → GPIO 22, 3.3 V, GND |
+| BNO086 INT / RST | INT → GPIO 4, RST → GPIO 23 (set to `-1` in `main.cpp` if not wired) |
 | `CAST_BUTTON` | GPIO 27 → GND (internal pull-up) |
 | `STATUS_LED` (WS2812B) | Data in → GPIO 18 |
 
@@ -29,7 +30,7 @@ cd firmware
 ## Progress
 
 - [x] PlatformIO project compiles (boot banner + heartbeat)
-- [ ] IMU readings on the serial monitor
+- [ ] IMU readings on the serial monitor (code compiles; needs hardware test)
 - [ ] `CAST_BUTTON` and the three operating states
 - [ ] `STATUS_LED`
 - [ ] `BLE_LINK`
