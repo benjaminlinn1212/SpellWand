@@ -1,0 +1,26 @@
+{
+  "dtw_threshold": 1.0,
+  "unknown_color": "#ff0000",
+  "gestures": {
+    "CIRCLE": {
+      "color": "#0050ff",
+      "action": {
+        "type": "wand_led",
+        "mode": "toggle"
+      }
+    },
+    "ZIGZAG": {
+      "color": "#ff4000",
+      "action": {
+        "type": "notify",
+        "message": "Zigzag cast!"
+      }
+    },
+    "HORIZONTAL_LINE": {
+      "color": "#00c828",
+      "action": {
+        "type": "none"
+      }
+    }
+  }
+}

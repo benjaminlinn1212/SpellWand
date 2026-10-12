@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SpellWand</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Recursive:slnt,wght,CASL@-15..0,300..800,0..1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<script src="{{ url_for('static', filename='app.js') }}" defer></script>
+</head>
+<body>
+
+<header class="bar">
+  <h1 class="wordmark">SpellWand</h1>
+  <div class="link" aria-live="polite">
+    <span id="link-dot" class="dot"></span>
+    <span id="link-text">Not connected</span>
+    <span id="wand-state" class="led-chip" data-state="IDLE" title="The wand's status LED">IDLE</span>
+  </div>
+  <div class="link-buttons">
+    <button id="connect-ble" type="button">Connect wand</button>
+    <button id="connect-sim" type="button" class="quiet">Use simulated wand</button>
+    <button id="disconnect" type="button" class="quiet" hidden>Disconnect</button>
+  </div>
+</header>
+
+<section id="sim-panel" class="sim" hidden>
+  <p>Simulated wand. Hold the cast button and:</p>
+  <div id="sim-buttons" class="sim-buttons"></div>
+</section>
+
+<main class="stage">
+  <figure class="trail-frame">
+    <div id="trail" class="trail" role="img" aria-label="3D path of the wand tip during the last cast"></div>
+    <figcaption id="trail-caption" class="trail-caption">No casts yet. Hold the cast button and draw a gesture.</figcaption>
+  </figure>
+
+  <aside class="verdict">
+    <p class="caption">Last cast</p>
+    <p id="verdict-label" class="spell">–</p>
+    <p id="verdict-detail" class="detail"></p>
+    <p id="verdict-action" class="detail"></p>
+    <h2>Recent casts</h2>
+    <ol id="history" class="history"></ol>
+  </aside>
+</main>
+
+<section class="signals" aria-label="Motion sensor readings">
+  <div id="accel-chart" class="chart"></div>
+  <div id="gyro-chart" class="chart"></div>
+</section>
+
+<div class="workbench">
+  <section class="panel">
+    <h2>Train a gesture</h2>
+    <p class="hint">Pick a gesture, press Start recording, perform it once, then press Stop and save.
+      Five or more examples of each gesture works well. You don't need to hold the button.</p>
+    <div class="row">
+      <select id="train-label" aria-label="Gesture to record"></select>
+      <button id="record-start" type="button">Start recording</button>
+      <button id="record-stop" type="button" class="recording" hidden>Stop and save</button>
+    </div>
+    <p id="record-status" class="hint"></p>
+  </section>
+
+  <section class="panel">
+    <h2>Recognition settings</h2>
+    <label class="field">
+      <span>Rejection threshold</span>
+      <input id="threshold" type="number" step="0.05" min="0.05">
+    </label>
+    <p class="hint">A cast farther than this from every example counts as UNKNOWN. Lower is stricter.</p>
+    <table class="gestures">
+      <thead><tr><th>Gesture</th><th>Colour</th><th>When cast</th><th></th></tr></thead>
+      <tbody id="gesture-rows"></tbody>
+    </table>
+    <div class="row">
+      <input id="new-gesture" placeholder="New gesture, e.g. TRIANGLE" maxlength="16" aria-label="New gesture name">
+      <button id="add-gesture" type="button" class="quiet">Add gesture</button>
+    </div>
+    <label class="field">
+      <span>Colour for UNKNOWN</span>
+      <input id="unknown-color" type="color">
+    </label>
+    <button id="save-settings" type="button">Save settings</button>
+  </section>
+</div>
+
+<section class="panel wide">
+  <div class="panel-head">
+    <h2>Dataset</h2>
+    <button id="check-dataset" type="button" class="quiet">Check dataset</button>
+  </div>
+  <p id="dataset-summary" class="hint"></p>
+  <div class="table-scroll">
+    <table class="samples">
+      <thead><tr><th>Recorded</th><th>Gesture</th><th class="num">Samples</th><th class="num">Length</th><th>Check</th><th></th></tr></thead>
+      <tbody id="sample-rows"></tbody>
+    </table>
+  </div>
+</section>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

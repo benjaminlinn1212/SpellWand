@@ -15,9 +15,9 @@ CONFIG_PATH = Path(__file__).parent / "config.json"
 
 ACTION_TYPES = {
     "none": "Do nothing",
-    "wand_led": "Switch the LED on the wand (EXECUTE_ACTION)",
-    "notify": "Show a Mac notification",
-    "webhook": "Send a web request (e.g. a Home Assistant webhook)",
+    "wand_led": "Switch wand LED",       # EXECUTE_ACTION to the wand's action LED
+    "notify": "Show notification",       # macOS notification
+    "webhook": "Send web request",       # e.g. a Home Assistant webhook
 }
 WAND_LED_MODES = ("toggle", "pulse")
 

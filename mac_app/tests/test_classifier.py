@@ -165,6 +165,15 @@ class PreprocessingTest(unittest.TestCase):
         self.assertEqual(result.label, "GX")
         self.assertLess(result.distance, 0.01)
 
+    def test_holding_still_before_and_after_the_gesture_is_ignored(self):
+        # Training recordings include waiting: after pressing Start, and before pressing Stop.
+        still = np.zeros(100)
+        padded = np.concatenate([still, bump(), still, still])
+        sequence = gyro_sequence(gx=padded, duration_ms=1000 * len(padded) / N_SAMPLES)
+        result = self.clf.classify(sequence)
+        self.assertEqual(result.label, "GX")
+        self.assertLess(result.distance, 0.05)
+
     def test_barely_moving_wand_is_unknown(self):
         # Exactly the GX shape, but so small it is just a twitch.
         result = self.clf.classify(gyro_sequence(gx=bump(amplitude=0.05)))

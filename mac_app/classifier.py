@@ -14,6 +14,8 @@ UNKNOWN = "UNKNOWN"
 RESAMPLE_LENGTH = 40       # every gesture is stretched or squeezed to this many points
 MIN_SAMPLES = 10           # anything shorter (0.1 s at 100 Hz) is not a gesture
 MIN_ROTATION_RAD_S = 0.3   # average rotation below this (about 17 deg/s) = the wand barely moved
+TRIM_FRACTION = 0.1        # trim start/end where rotation is under 10 % of the gesture's peak...
+STILL_FLOOR_RAD_S = 0.2    # ...or under this, whichever is larger (sensor noise is far below it)
 ACCEL_UNIT = 9.81          # m/s^2 per g
 GYRO_UNIT = np.pi          # rad/s per half-turn-per-second
 
@@ -66,7 +68,11 @@ class GestureClassifier:
     def classify(self, sequence):
         """Return a GestureResult for one GestureSequence."""
         best_label, best_distance = None, math.inf
-        if len(sequence.t_ms) >= MIN_SAMPLES and wand_moved(sequence):
+        t = np.asarray(sequence.t_ms, dtype=float)
+        start, end = active_span(sequence) if len(t) else (0.0, 0.0)
+        inside = (t >= start) & (t <= end)
+        moving_part = GestureSequence(t[inside], np.asarray(sequence.imu)[inside])
+        if np.count_nonzero(inside) >= MIN_SAMPLES and wand_moved(moving_part):
             query = preprocess(sequence)
             for label, example in self._examples:
                 # Divide by the length so the distance is an average per point.
@@ -116,23 +122,51 @@ def preprocess(sequence, length=RESAMPLE_LENGTH):
        wand happened to be tilted, and as the wand turns it shifts between the axes,
        which would make the same gesture look different at different tilts. We know
        which way is down at each moment by following the gyro (see motion_trace.py).
-    2. Resample onto `length` evenly spaced moments between the first and last
-       timestamp, so fast and slow casts line up point by point.
-    3. Convert to g and half-turns per second, where a typical gesture is about the
+    2. Cut off the still time at the start and end (see active_span), e.g. the
+       pause after pressing Start recording.
+    3. Resample onto `length` evenly spaced moments between the first and last
+       remaining timestamp, so fast and slow casts line up point by point.
+    4. Convert to g and half-turns per second, where a typical gesture is about the
        same size on both sensors, so neither one drowns out the other.
-    4. Scale the whole gesture to overall size 1, so big and small, fast and slow
+    5. Scale the whole gesture to overall size 1, so big and small, fast and slow
        versions of the same gesture match. (This is why wand_moved() is needed:
        scaling would blow a tiny twitch up into a full-size shape.)
     """
     t = np.asarray(sequence.t_ms, dtype=float)
     imu = np.array(sequence.imu, dtype=float)  # a copy, so the caller's data is untouched
-    imu[:, 0:3] -= gravity_in_wand(sequence)
-    new_t = np.linspace(t[0], t[-1], length)
+    imu[:, 0:3] -= gravity_in_wand(sequence)  # uses the whole recording: still parts show gravity best
+    start, end = active_span(sequence)
+    new_t = np.linspace(start, end, length)
     resampled = np.column_stack([np.interp(new_t, t, imu[:, k]) for k in range(imu.shape[1])])
     resampled[:, 0:3] /= ACCEL_UNIT
     resampled[:, 3:6] /= GYRO_UNIT
     size = _rms(resampled)
     return resampled / size if size > 0 else resampled
+
+
+def active_span(sequence):
+    """Times (start_ms, end_ms) of the part where the wand is moving, without the still
+    time before and after it.
+
+    The cut-off is a fraction of the gesture's own peak rotation speed, so the same
+    gesture done faster, slower, bigger or smaller is trimmed at the same point of its
+    motion. The exact moment is found by interpolating between samples.
+    """
+    t = np.asarray(sequence.t_ms, dtype=float)
+    rate = np.linalg.norm(np.asarray(sequence.imu, dtype=float)[:, 3:6], axis=1)
+    limit = max(STILL_FLOOR_RAD_S, TRIM_FRACTION * rate.max())
+    moving = np.flatnonzero(rate > limit)
+    if len(moving) == 0:
+        return t[0], t[-1]
+    first, last = moving[0], moving[-1]
+    start = _crossing_time(t, rate, first - 1, first, limit) if first > 0 else t[0]
+    end = _crossing_time(t, rate, last, last + 1, limit) if last < len(t) - 1 else t[-1]
+    return start, end
+
+
+def _crossing_time(t, rate, a, b, limit):
+    """When the rotation speed passed `limit` between samples a and b (straight-line estimate)."""
+    return t[a] + (limit - rate[a]) * (t[b] - t[a]) / (rate[b] - rate[a])
 
 
 def wand_moved(sequence):
