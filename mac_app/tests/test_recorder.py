@@ -11,7 +11,10 @@ from pathlib import Path
 import numpy as np
 
 from classifier import GestureSequence
-from recorder import delete_sample, list_samples, load_dataset, load_sample, save_sample
+from protocol import MotionSample
+from recorder import (
+    delete_sample, list_samples, load_dataset, load_sample, save_sample, sequence_from_samples,
+)
 
 
 def sample(label="CIRCLE", n=5, start_ms=1000.0):
@@ -100,6 +103,26 @@ class RecorderTest(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     save_sample(sample(label=bad_label), self.data_dir)
         self.assertEqual(list_samples(self.data_dir), [])
+
+
+class SequenceFromSamplesTest(unittest.TestCase):
+    def test_samples_become_a_gesture_sequence_in_index_order(self):
+        samples = [
+            MotionSample(1, 1010, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6),
+            MotionSample(0, 1000, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0),
+            MotionSample(1, 1010, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6),  # duplicate delivery
+            MotionSample(2, 1020, 7.0, 8.0, 9.0, 1.0, 2.0, 3.0),
+        ]
+        sequence = sequence_from_samples(samples, label="CIRCLE")
+        self.assertEqual(sequence.label, "CIRCLE")
+        np.testing.assert_array_equal(sequence.t_ms, [1000, 1010, 1020])
+        np.testing.assert_array_equal(sequence.imu[0], [1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+        np.testing.assert_array_equal(sequence.imu[2], [7.0, 8.0, 9.0, 1.0, 2.0, 3.0])
+
+    def test_no_samples_gives_an_empty_sequence(self):
+        sequence = sequence_from_samples([])
+        self.assertEqual(sequence.imu.shape, (0, 6))
+        self.assertEqual(len(sequence.t_ms), 0)
 
 
 if __name__ == "__main__":

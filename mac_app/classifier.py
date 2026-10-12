@@ -82,6 +82,33 @@ class GestureClassifier:
         )
 
 
+@dataclass
+class ExampleCheck:
+    """How one training example compares with all the other examples (see leave_one_out)."""
+    index: int
+    label: str
+    nearest_label: str | None
+    distance: float
+
+
+def leave_one_out(examples):
+    """Compare every labelled example with all the *other* examples. One whose nearest
+    neighbour has a different label, or that is far from everything, is probably a
+    bad recording worth deleting."""
+    prepared = [preprocess(example) for example in examples]
+    n = len(examples)
+    distances = np.full((n, n), math.inf)
+    for i in range(n):
+        for j in range(i + 1, n):  # DTW distance is symmetric: compute each pair once
+            distances[i, j] = distances[j, i] = dtw_distance(prepared[i], prepared[j]) / RESAMPLE_LENGTH
+    checks = []
+    for i, example in enumerate(examples):
+        j = int(np.argmin(distances[i])) if n > 1 else None
+        nearest = examples[j].label if j is not None else None
+        checks.append(ExampleCheck(i, example.label, nearest, float(distances[i, j]) if j is not None else math.inf))
+    return checks
+
+
 def preprocess(sequence, length=RESAMPLE_LENGTH):
     """Turn a GestureSequence into a (length x 6) array ready for DTW.
 

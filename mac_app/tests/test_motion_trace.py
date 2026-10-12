@@ -10,7 +10,7 @@ import numpy as np
 
 from classifier import GestureSequence
 from motion_trace import tip_trace
-from synthetic import make_gesture
+from simulator import make_gesture
 
 G = 9.81
 L = 0.3  # wand length in metres

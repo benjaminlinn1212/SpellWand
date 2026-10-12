@@ -95,3 +95,13 @@ def _sample_path(sample_id, data_dir):
     if not isinstance(sample_id, str) or not SAMPLE_ID_PATTERN.fullmatch(sample_id):
         raise ValueError(f"invalid sample id {sample_id!r}")
     return Path(data_dir) / f"{sample_id}.csv"
+
+
+def sequence_from_samples(samples, label=None):
+    """Turn MotionSamples received over BLE_LINK into a GestureSequence: put them in
+    index order and drop duplicates (BLE can deliver a notification twice)."""
+    unique = {s.index: s for s in samples}
+    ordered = [unique[i] for i in sorted(unique)]
+    t_ms = np.array([s.t_ms for s in ordered], dtype=float)
+    imu = np.array([[s.ax, s.ay, s.az, s.gx, s.gy, s.gz] for s in ordered], dtype=float).reshape(-1, 6)
+    return GestureSequence(t_ms=t_ms, imu=imu, label=label)

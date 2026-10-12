@@ -8,8 +8,8 @@ import unittest
 
 import numpy as np
 
-from classifier import UNKNOWN, GestureClassifier, GestureSequence, dtw_distance
-from synthetic import GESTURES, casual_movement, make_gesture
+from classifier import UNKNOWN, GestureClassifier, GestureSequence, dtw_distance, leave_one_out
+from simulator import GESTURES, casual_movement, make_gesture
 
 N_SAMPLES = 40
 
@@ -179,8 +179,30 @@ class PreprocessingTest(unittest.TestCase):
                 self.assertEqual(result.label, UNKNOWN)
 
 
+class DatasetCheckTest(unittest.TestCase):
+    def test_each_example_is_compared_with_all_the_others(self):
+        examples = three_axis_examples() + three_axis_examples()
+        checks = leave_one_out(examples)
+        self.assertEqual([c.label for c in checks], ["GX", "GY", "GZ", "GX", "GY", "GZ"])
+        self.assertEqual([c.nearest_label for c in checks], ["GX", "GY", "GZ", "GX", "GY", "GZ"])
+        for c in checks:
+            self.assertAlmostEqual(c.distance, 0.0)
+
+    def test_mislabelled_example_is_flagged(self):
+        examples = three_axis_examples() + three_axis_examples()
+        examples[0] = gyro_sequence(gy=bump(), label="GX")  # a y-swing saved under the wrong label
+        check = leave_one_out(examples)[0]
+        self.assertEqual(check.label, "GX")
+        self.assertEqual(check.nearest_label, "GY")
+
+    def test_single_example_has_nothing_to_compare_with(self):
+        [check] = leave_one_out([gyro_sequence(gx=bump(), label="GX")])
+        self.assertIsNone(check.nearest_label)
+        self.assertEqual(check.distance, math.inf)
+
+
 class SimulatedGestureTest(unittest.TestCase):
-    """Whole-classifier check on simulated gestures (see synthetic.py).
+    """Whole-classifier check on simulated gestures (see simulator.py).
     5 training examples per gesture, then 20 fresh variations each, plus casual movement."""
 
     @classmethod
