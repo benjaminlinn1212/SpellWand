@@ -36,6 +36,10 @@ real data in `mac_app/data/` and `mac_app/config.json` are never touched. Delete
 | Action LED (demo output) | GPIO 26 → 330 Ω resistor → LED long leg; short leg → GND |
 | Power: 4× AAA holder with switch | + → ESP32 **5V/VIN** pin; − → ESP32 GND (see Power below) |
 
+**RGB LED legs:** the longest leg is the common one. On most 5 mm RGB LEDs the order is red, common, green,
+blue, but check yours: with the common leg on GND, touch each other leg to 3V3 through a resistor and see
+which colour lights.
+
 **RGB LED type:** if your LED is *common anode* (the long leg must go to 3.3 V instead of GND), wire the long
 leg to the ESP32's 3V3 pin and set `STATUS_LED_COMMON_ANODE = true` in `firmware/src/main.cpp`. Green and blue
 need about 3 V of the 3.3 V available, hence their smaller resistors; they will still look a little dimmer than red.

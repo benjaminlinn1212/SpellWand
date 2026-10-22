@@ -496,7 +496,9 @@ def circuit():
 
     # RGB status LED (common cathode)
     svg.rect(800, 322, 158, 128, "none", "#8a8fa0", rx=8, dash="5 4", width=1.3)
-    svg.lines(970, 372, ["D1: 4-leg", "RGB LED", "(common", "cathode)"], size=11.5, gap=16, weight=600)
+    svg.lines(970, 344, ["D1: 4-leg RGB LED", "(common cathode)"], size=11.5, gap=16, weight=600)
+    svg.lines(970, 386, ["Legs, typically:", "red, common (longest),", "green, blue"], size=11, gap=15,
+              fill=MUTED)
     for yy, name, value, colour, legname in [(350, "R1", "220 Ω", "#e53935", "red"),
                                               (390, "R2", "100 Ω", "#2e9d4f", "green"),
                                               (430, "R3", "100 Ω", "#2f55ff", "blue")]:
@@ -507,7 +509,7 @@ def circuit():
         svg.line([(870, yy), (930, yy)], width=2)
         svg.text(818, yy + 16, legname, size=10.5, fill=MUTED, anchor="middle")
     svg.line([(930, 350), (930, 462)], width=2)
-    svg.text(948, 470, "long leg", size=10.5, fill=MUTED)
+    svg.text(948, 470, "common leg (longest)", size=10.5, fill=MUTED)
     ground(svg, 930, 462)
 
     # CAST_BUTTON

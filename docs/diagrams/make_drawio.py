@@ -348,7 +348,9 @@ def circuit():
 
     # RGB status LED (common cathode)
     d.vertex("", 800, 318, 158, 136, "rounded=1;arcSize=6;dashed=1;fillColor=none;strokeColor=#8a8fa0;")
-    d.text("D1: 4-leg<br>RGB LED<br>(common<br>cathode)", 968, 352, 100, 70, size=11.5, bold=True)
+    d.text("D1: 4-leg RGB LED<br>(common cathode)", 968, 332, 200, 36, size=11.5, bold=True)
+    d.text("Legs, typically:<br>red, common (longest),<br>green, blue", 968, 372, 200, 52, size=11,
+           colour=MUTED)
     rgb_ground = ground_at(d, 930, 470)
     for y, name, colour in [(350, "R1 220 Ω", "#e53935"), (390, "R2 100 Ω", "#2e9d4f"), (430, "R3 100 Ω", "#2f55ff")]:
         resistor = part(d, RESISTOR, name, 716, y - 7, 64, 14, label_on="top")
@@ -356,7 +358,7 @@ def circuit():
         wire(d, esp, resistor, SIGNAL, exit_at=pin(y, "right"), entry_at=(0, 0.5))
         wire(d, resistor, led, SIGNAL, exit_at=(1, 0.5), entry_at=(0, LED[1]))
         wire(d, led, rgb_ground, INK, exit_at=(1, LED[1]), entry_at=(0.5, 0), points=[(930, y)])
-    d.text("long leg", 944, 456, 60, 16, size=10.5, colour=MUTED)
+    d.text("common leg (longest)", 944, 456, 140, 16, size=10.5, colour=MUTED)
 
     # CAST_BUTTON
     button = part(d, BUTTON, "SW2: CAST_BUTTON", 826, 530 - 0.8 * 16, 60, 16, label_on="top")
