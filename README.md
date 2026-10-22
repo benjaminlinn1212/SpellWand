@@ -131,9 +131,12 @@ ESP32  ──BLE_LINK──>  ble_manager.py ──> controller.py ──> class
 
 `simulator.py` can stand in for the ESP32 at the left end (`app.py --simulate`, and the tests).
 
-**Diagrams** (SVG and PNG) in `docs/diagrams/`: `code_flowchart`, `wand_states`, `classifier_pipeline` and
-`circuit`. They're drawn by `python3 docs/diagrams/make_diagrams.py` (plain Python), so edit that script and
-rerun it when the design changes.
+**Diagrams** in `docs/diagrams/`:
+- `code_flowchart.drawio` and `circuit.drawio`: **editable** in draw.io (https://app.diagrams.net or the
+  desktop app). Arrows and wires stay attached when you move things; the circuit uses draw.io's
+  electrical symbols. Regenerate them with `python3 docs/diagrams/make_drawio.py` (this overwrites edits).
+- SVG and PNG pictures of `code_flowchart`, `wand_states`, `classifier_pipeline` and `circuit`, drawn by
+  `python3 docs/diagrams/make_diagrams.py`.
 
 ## Progress
 
