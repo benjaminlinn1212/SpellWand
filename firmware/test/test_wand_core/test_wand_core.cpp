@@ -10,6 +10,7 @@
 #include "debouncer.h"
 #include "gyro_bias.h"
 #include "imu_units.h"
+#include "rgb_led.h"
 #include "protocol.h"
 #include "wand_state.h"
 
@@ -431,6 +432,23 @@ static void test_later_still_moments_follow_a_drifting_offset() {
   TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, gyro[0]);
 }
 
+// ---------- STATUS_LED as a 4-leg RGB LED (PWM on three pins) ----------
+
+static void test_common_cathode_led_is_driven_by_brightness_directly() {
+  // Common cathode: long leg to GND, so a higher PWM duty means brighter.
+  TEST_ASSERT_EQUAL_UINT8(255, rgb_led::duty(255, 255, false));
+  TEST_ASSERT_EQUAL_UINT8(64, rgb_led::duty(255, 64, false));   // full colour at quarter brightness
+  TEST_ASSERT_EQUAL_UINT8(32, rgb_led::duty(128, 64, false));
+  TEST_ASSERT_EQUAL_UINT8(0, rgb_led::duty(0, 255, false));
+}
+
+static void test_common_anode_led_is_driven_inverted() {
+  // Common anode: long leg to 3.3 V, so the pin must go LOW to light the colour.
+  TEST_ASSERT_EQUAL_UINT8(0, rgb_led::duty(255, 255, true));    // fully on
+  TEST_ASSERT_EQUAL_UINT8(191, rgb_led::duty(255, 64, true));
+  TEST_ASSERT_EQUAL_UINT8(255, rgb_led::duty(0, 255, true));    // off
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_events_encode_to_the_documented_bytes);
@@ -464,5 +482,7 @@ int main() {
   RUN_TEST(test_tilting_slowly_is_not_mistaken_for_an_offset);
   RUN_TEST(test_restart_drops_a_half_measured_window);
   RUN_TEST(test_later_still_moments_follow_a_drifting_offset);
+  RUN_TEST(test_common_cathode_led_is_driven_by_brightness_directly);
+  RUN_TEST(test_common_anode_led_is_driven_inverted);
   return UNITY_END();
 }

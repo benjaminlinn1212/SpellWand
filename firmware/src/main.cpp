@@ -3,7 +3,7 @@
 // Hardware glue around the tested logic in lib/wand_core:
 //   IMU (MPU-9250 / MPU-6500, I2C) -> MOTION_SAMPLE events while CASTING
 //   CAST_BUTTON        -> debounced, drives IDLE / CASTING / INFLIGHT
-//   STATUS_LED         -> colour from the state machine (WS2812B via neopixelWrite)
+//   STATUS_LED         -> colour from the state machine (4-leg RGB LED, PWM on three pins)
 //   BLE_LINK           -> events notified to the Mac, commands written by the Mac
 //   ACTION_LED         -> low-voltage LED the Mac can switch with EXECUTE_ACTION
 // Message format: docs/protocol.md
@@ -19,13 +19,16 @@
 #include "gyro_bias.h"
 #include "imu_units.h"
 #include "protocol.h"
+#include "rgb_led.h"
 #include "wand_state.h"
 
 // ---- Pins (see the wiring table in README.md) ----
 static const int IMU_SDA_PIN = 21;
 static const int IMU_SCL_PIN = 22;
 static const int CAST_BUTTON_PIN = 27;  // to GND, internal pull-up: LOW = pressed
-static const int STATUS_LED_PIN = 18;   // WS2812B data in
+static const int STATUS_LED_RED_PIN = 18;    // each through its resistor to the RGB LED's legs
+static const int STATUS_LED_GREEN_PIN = 19;
+static const int STATUS_LED_BLUE_PIN = 23;
 static const int ACTION_LED_PIN = 26;   // LED + 330 ohm resistor to GND
 
 // ---- Settings ----
@@ -34,7 +37,10 @@ static const uint32_t I2C_CLOCK_HZ = 400000;      // the MPU supports 400 kHz; d
 static const uint32_t IMU_POLL_US = 1000;         // check for a new reading every 1 ms (they come every 10 ms)
 static const uint32_t IMU_RETRY_MS = 2000;
 static const uint32_t GYRO_CALIBRATION_MS = 3000; // at boot, wait up to this long for the wand to be still
-static const uint8_t LED_BRIGHTNESS = 64;           // 0-255; a WS2812B at full power is dazzling
+static const uint8_t LED_BRIGHTNESS = 255;          // 0-255; the resistors already limit the current
+// Common cathode: the LED's long leg goes to GND. Common anode: long leg to 3.3 V -> set true.
+static const bool STATUS_LED_COMMON_ANODE = false;
+static const uint32_t LED_PWM_HZ = 5000;            // fast enough that the eye sees no flicker
 
 // BLE_LINK identifiers: must match mac_app/protocol.py
 static const char* DEVICE_NAME = "SpellWand";
@@ -311,14 +317,25 @@ static void handleCommand(const protocol::Command& command, uint32_t now) {
 }
 
 // ---------------------------------------------------------------------------
+// STATUS_LED (RGB LED on three PWM channels) and the action LED
+
+static const int LED_PINS[3] = {STATUS_LED_RED_PIN, STATUS_LED_GREEN_PIN, STATUS_LED_BLUE_PIN};
+
+static void startStatusLed() {
+  for (int channel = 0; channel < 3; channel++) {
+    ledcSetup(channel, LED_PWM_HZ, 8);  // 8-bit duty: 0-255, like the colour values
+    ledcAttachPin(LED_PINS[channel], channel);
+  }
+}
 
 static void updateLeds(uint32_t now) {
   static Rgb shown = {1, 2, 3};  // impossible start value forces the first write
   Rgb c = wand.ledColor(now);
   if (c.r != shown.r || c.g != shown.g || c.b != shown.b) {
     shown = c;
-    neopixelWrite(STATUS_LED_PIN, c.r * LED_BRIGHTNESS / 255, c.g * LED_BRIGHTNESS / 255,
-                  c.b * LED_BRIGHTNESS / 255);
+    ledcWrite(0, rgb_led::duty(c.r, LED_BRIGHTNESS, STATUS_LED_COMMON_ANODE));
+    ledcWrite(1, rgb_led::duty(c.g, LED_BRIGHTNESS, STATUS_LED_COMMON_ANODE));
+    ledcWrite(2, rgb_led::duty(c.b, LED_BRIGHTNESS, STATUS_LED_COMMON_ANODE));
   }
   digitalWrite(ACTION_LED_PIN, actionLed.level(now) ? HIGH : LOW);
 }
@@ -331,6 +348,7 @@ void setup() {
 
   pinMode(CAST_BUTTON_PIN, INPUT_PULLUP);
   pinMode(ACTION_LED_PIN, OUTPUT);
+  startStatusLed();
   updateLeds(millis());
 
   Wire.begin(IMU_SDA_PIN, IMU_SCL_PIN, I2C_CLOCK_HZ);

@@ -32,8 +32,27 @@ real data in `mac_app/data/` and `mac_app/config.json` are never touched. Delete
 | IMU other pins | NCS → 3.3 V if your board has it and doesn't already pull it up (selects I²C mode). INT, FSYNC, EDA, ECL: leave unconnected |
 | IMU mounting | x axis (printed on the board) along the wand toward the tip; y left and z up when the wand is held level (the Mac app assumes this) |
 | `CAST_BUTTON` | GPIO 27 → button → GND (internal pull-up) |
-| `STATUS_LED` (WS2812B) | Data in → GPIO 18, 5 V (or 3.3 V), GND |
-| Action LED (demo output) | GPIO 26 → 330 Ω resistor → LED → GND |
+| `STATUS_LED` (4-leg RGB LED) | GPIO 18 → 220 Ω → red leg; GPIO 19 → 68–100 Ω → green leg; GPIO 23 → 68–100 Ω → blue leg; long (common) leg → GND |
+| Action LED (demo output) | GPIO 26 → 330 Ω resistor → LED long leg; short leg → GND |
+| Power: 4× AAA holder with switch | + → ESP32 **5V/VIN** pin; − → ESP32 GND (see Power below) |
+
+**RGB LED type:** if your LED is *common anode* (the long leg must go to 3.3 V instead of GND), wire the long
+leg to the ESP32's 3V3 pin and set `STATUS_LED_COMMON_ANODE = true` in `firmware/src/main.cpp`. Green and blue
+need about 3 V of the 3.3 V available, hence their smaller resistors; they will still look a little dimmer than red.
+
+## Power
+
+4× AAA (about 6 V fresh) go straight into the **5V/VIN** pin; the board's 1117 regulator turns that into 3.3 V
+for the ESP32, the IMU and the RGB LED (it needs about 4.3 V or more, which 4 cells keep up until nearly empty).
+Use the holder's switch as the wand's on/off switch. Rechargeable NiMH AAA work too.
+
+- **Never connect the batteries to the 3V3 pin**: 6 V there destroys the ESP32.
+- **Check polarity before switching on**: dev boards usually have no reverse-polarity protection.
+- **Switch the batteries off while the USB cable is plugged in** (flashing, serial monitor), so the two
+  supplies can't push into each other or into your computer's USB port.
+- All grounds (batteries, ESP32, IMU, LEDs, button) connect together.
+- If the ESP32 keeps restarting on battery and the serial monitor says *Brownout detector was triggered*,
+  the batteries are too low.
 
 This branch (`mpu9250`) is for the MPU-9250 / MPU-6500; branch `main` has the BNO086 version. The magnetometer
 of an MPU-9250 is not used, so an MPU-6500 (or a board sold as "MPU-9250/6500") works the same.
@@ -74,7 +93,7 @@ another app without that declaration, makes Python crash immediately with exit c
 
 ```bash
 cd mac_app && .venv/bin/python -m unittest discover -s tests -v      # Mac app: 115 tests
-cd firmware && ~/.platformio/penv/bin/pio test -e native              # wand logic: 31 tests, run on the Mac
+cd firmware && ~/.platformio/penv/bin/pio test -e native              # wand logic: 33 tests, run on the Mac
 ```
 
 Both suites check the same example bytes from `docs/protocol.md`, so the two sides agree on the format.
