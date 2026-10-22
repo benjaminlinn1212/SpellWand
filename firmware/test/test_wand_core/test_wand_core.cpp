@@ -8,6 +8,8 @@
 
 #include "action_output.h"
 #include "debouncer.h"
+#include "gyro_bias.h"
+#include "imu_units.h"
 #include "protocol.h"
 #include "wand_state.h"
 
@@ -335,6 +337,100 @@ static void test_unknown_action_is_refused() {
   TEST_ASSERT_FALSE(output.level(0));
 }
 
+// ---------- MPU-9250 / MPU-6500 raw data ----------
+
+static void test_register_bytes_combine_high_byte_first() {
+  TEST_ASSERT_EQUAL_INT16(4096, imu_units::fromBigEndian(0x10, 0x00));
+  TEST_ASSERT_EQUAL_INT16(-200, imu_units::fromBigEndian(0xFF, 0x38));
+  TEST_ASSERT_EQUAL_INT16(-32768, imu_units::fromBigEndian(0x80, 0x00));
+}
+
+static void test_raw_readings_convert_to_si_units() {
+  // +-8 g range: 4096 counts per g. +-2000 deg/s range: 16.4 counts per deg/s.
+  TEST_ASSERT_FLOAT_WITHIN(1e-4f, 9.80665f, imu_units::accelToMs2(4096));
+  TEST_ASSERT_FLOAT_WITHIN(1e-4f, -19.6133f, imu_units::accelToMs2(-8192));
+  TEST_ASSERT_FLOAT_WITHIN(1e-5f, 0.174533f, imu_units::gyroToRadS(164));     // 10 deg/s
+  TEST_ASSERT_FLOAT_WITHIN(1e-4f, -1.745329f, imu_units::gyroToRadS(-1640));  // -100 deg/s
+}
+
+// ---------- learning the gyro offset while the wand is still ----------
+
+static const float LEVEL[3] = {0.0f, 0.0f, 9.81f};
+
+// Feeds `n` readings: a constant gyro value plus a tiny +-0.002 rad/s wobble.
+static bool feedStill(GyroBias& bias, float gx, float gy, float gz, int n) {
+  bool learnt = false;
+  for (int i = 0; i < n; i++) {
+    float wobble = (i % 2 == 0) ? 0.002f : -0.002f;
+    float gyro[3] = {gx + wobble, gy - wobble, gz + wobble};
+    learnt = bias.update(gyro, LEVEL) || learnt;
+  }
+  return learnt;
+}
+
+static void test_holding_still_reveals_the_gyro_offset() {
+  GyroBias bias;
+  TEST_ASSERT_FALSE(bias.ready());
+  TEST_ASSERT_TRUE(feedStill(bias, 0.03f, -0.02f, 0.05f, GyroBias::WINDOW));
+  TEST_ASSERT_TRUE(bias.ready());
+  float gyro[3] = {1.03f, -0.02f, 0.05f};
+  bias.correct(gyro);
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.0f, gyro[0]);
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, gyro[1]);
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, gyro[2]);
+}
+
+static void test_a_moving_wand_teaches_nothing() {
+  GyroBias bias;
+  for (int i = 0; i < 3 * GyroBias::WINDOW; i++) {
+    // Waving evenly back and forth at 1 rad/s: it averages to exactly zero, so only the
+    // "did the gyro stay steady?" check can tell this is not stillness.
+    float swing = (i % 10 < 5) ? 1.0f : -1.0f;
+    float gyro[3] = {swing, 0.0f, 0.0f};
+    TEST_ASSERT_FALSE(bias.update(gyro, LEVEL));
+  }
+  TEST_ASSERT_FALSE(bias.ready());
+}
+
+static void test_a_slow_steady_turn_is_not_mistaken_for_an_offset() {
+  // Turning steadily about the vertical axis at 0.3 rad/s: the gyro reading is constant
+  // and gravity doesn't change, but 17 deg/s is far more than any real offset.
+  GyroBias bias;
+  TEST_ASSERT_FALSE(feedStill(bias, 0.0f, 0.0f, 0.3f, 2 * GyroBias::WINDOW));
+  TEST_ASSERT_FALSE(bias.ready());
+}
+
+static void test_tilting_slowly_is_not_mistaken_for_an_offset() {
+  // A steady small gyro reading, but the accelerometer shows the wand tipping over.
+  GyroBias bias;
+  for (int i = 0; i < GyroBias::WINDOW; i++) {
+    float gyro[3] = {0.05f, 0.0f, 0.0f};
+    float accel[3] = {0.0f, 0.06f * i, 9.81f};
+    TEST_ASSERT_FALSE(bias.update(gyro, accel));
+  }
+  TEST_ASSERT_FALSE(bias.ready());
+}
+
+static void test_restart_drops_a_half_measured_window() {
+  GyroBias bias;
+  feedStill(bias, 0.10f, 0.0f, 0.0f, GyroBias::WINDOW / 2);
+  bias.restart();  // e.g. a cast began
+  TEST_ASSERT_TRUE(feedStill(bias, 0.02f, 0.0f, 0.0f, GyroBias::WINDOW));
+  float gyro[3] = {0.02f, 0.0f, 0.0f};
+  bias.correct(gyro);
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, gyro[0]);
+}
+
+static void test_later_still_moments_follow_a_drifting_offset() {
+  // The offset changes as the chip warms up; each still period re-measures it.
+  GyroBias bias;
+  feedStill(bias, 0.02f, 0.0f, 0.0f, GyroBias::WINDOW);
+  feedStill(bias, 0.04f, 0.0f, 0.0f, GyroBias::WINDOW);
+  float gyro[3] = {0.04f, 0.0f, 0.0f};
+  bias.correct(gyro);
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, gyro[0]);
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_events_encode_to_the_documented_bytes);
@@ -360,5 +456,13 @@ int main() {
   RUN_TEST(test_toggle_switches_the_action_led);
   RUN_TEST(test_pulse_lights_the_action_led_briefly);
   RUN_TEST(test_unknown_action_is_refused);
+  RUN_TEST(test_register_bytes_combine_high_byte_first);
+  RUN_TEST(test_raw_readings_convert_to_si_units);
+  RUN_TEST(test_holding_still_reveals_the_gyro_offset);
+  RUN_TEST(test_a_moving_wand_teaches_nothing);
+  RUN_TEST(test_a_slow_steady_turn_is_not_mistaken_for_an_offset);
+  RUN_TEST(test_tilting_slowly_is_not_mistaken_for_an_offset);
+  RUN_TEST(test_restart_drops_a_half_measured_window);
+  RUN_TEST(test_later_still_moments_follow_a_drifting_offset);
   return UNITY_END();
 }

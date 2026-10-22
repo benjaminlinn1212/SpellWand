@@ -27,12 +27,19 @@ real data in `mac_app/data/` and `mac_app/config.json` are never touched. Delete
 | Part | Connection |
 |---|---|
 | ESP32-WROOM-32 dev board | PlatformIO board `esp32dev` |
-| BNO086 IMU | I²C: SDA → GPIO 21, SCL → GPIO 22, 3.3 V, GND |
-| BNO086 INT / RST | INT → GPIO 4, RST → GPIO 23 (set to `-1` in `main.cpp` if not wired) |
-| BNO086 mounting | x axis along the wand toward the tip; y left and z up when the wand is held level (the Mac app assumes this) |
+| MPU-9250 / MPU-6500 IMU | I²C: SDA → GPIO 21, SCL → GPIO 22, VCC → 3.3 V, GND → GND |
+| IMU address pin | AD0 → GND (address 0x68); AD0 → 3.3 V also works (0x69) |
+| IMU other pins | NCS → 3.3 V if your board has it and doesn't already pull it up (selects I²C mode). INT, FSYNC, EDA, ECL: leave unconnected |
+| IMU mounting | x axis (printed on the board) along the wand toward the tip; y left and z up when the wand is held level (the Mac app assumes this) |
 | `CAST_BUTTON` | GPIO 27 → button → GND (internal pull-up) |
 | `STATUS_LED` (WS2812B) | Data in → GPIO 18, 5 V (or 3.3 V), GND |
 | Action LED (demo output) | GPIO 26 → 330 Ω resistor → LED → GND |
+
+This branch (`mpu9250`) is for the MPU-9250 / MPU-6500; branch `main` has the BNO086 version. The magnetometer
+of an MPU-9250 is not used, so an MPU-6500 (or a board sold as "MPU-9250/6500") works the same.
+
+**Gyro offset:** keep the wand still for a moment after switching it on. The firmware measures the gyro's
+offset then, and again whenever the wand rests in `IDLE`, because the offset drifts as the chip warms up.
 
 `STATUS_LED` colours: dim white `IDLE`, blue `CASTING`, amber `INFLIGHT` (waiting for the Mac), then the
 spell colour for 1 s, three flashes of the `UNKNOWN` colour (red by default), or two magenta flashes if the
@@ -67,7 +74,7 @@ another app without that declaration, makes Python crash immediately with exit c
 
 ```bash
 cd mac_app && .venv/bin/python -m unittest discover -s tests -v      # Mac app: 115 tests
-cd firmware && ~/.platformio/penv/bin/pio test -e native              # wand logic: 23 tests, run on the Mac
+cd firmware && ~/.platformio/penv/bin/pio test -e native              # wand logic: 31 tests, run on the Mac
 ```
 
 Both suites check the same example bytes from `docs/protocol.md`, so the two sides agree on the format.
@@ -78,8 +85,11 @@ Work through these in order; each step only needs the ones before it.
 
 1. **Board alone.** Flash and open the serial monitor. Expect `=== SpellWand firmware booted ===`,
    `BLE advertising as SpellWand` and an IMU error (no IMU yet). The `STATUS_LED` should glow dim white.
-2. **IMU.** Wire the BNO086. Expect `BNO08x answered at 0x4B` (or `0x4A`) and `IMU reports: ... on`.
-   If readings are flaky, set `I2C_FAST_CLOCK_HZ` to `100000` in `firmware/src/main.cpp`.
+2. **IMU.** Wire the MPU and reboot with the wand lying still. Expect
+   `IMU answered at 0x68: WHO_AM_I = 0x71 (MPU-9250)` (0x70 means MPU-6500; both are fine),
+   `IMU ready: 100 Hz, +-8 g, +-2000 deg/s, 45 Hz low-pass` and `Gyro offset: ... deg/s`
+   (typically a few deg/s). A `WARNING: not an MPU-9250/6500` line means a clone or another chip: tell me the
+   WHO_AM_I value. If readings are flaky, set `I2C_CLOCK_HZ` to `100000` in `firmware/src/main.cpp`.
 3. **Button and LED.** Hold `CAST_BUTTON`: serial shows `CAST_START`, the LED turns blue; release: `CAST_END`,
    amber, then two magenta flashes after 2 s (nobody answered yet).
 4. **Bluetooth.** `cd mac_app && .venv/bin/python ble_manager.py --listen`, then cast: you should see
