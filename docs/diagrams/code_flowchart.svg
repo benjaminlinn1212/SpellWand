@@ -1,0 +1,137 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="1180" viewBox="0 0 1240 1180" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+<title>SpellWand code flow</title>
+<defs><marker id="arrow-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1f2430"/></marker><marker id="arrow-tomac" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#d9822b"/></marker><marker id="arrow-towand" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7b4fd6"/></marker><marker id="arrow-no" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c62828"/></marker><marker id="arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5b6070"/></marker></defs>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="30" y="44" font-size="22" font-weight="700" text-anchor="start" fill="#1f2430">SpellWand: code flow</text>
+<text x="30" y="68" font-size="13" font-weight="400" text-anchor="start" fill="#5b6070">What the wand firmware and the Mac app do, and the BLE_LINK messages between them.</text>
+<rect x="30" y="92" width="380" height="46" rx="8" fill="#e8eeff" stroke="#3d5bd9" stroke-width="1.5"/>
+<text x="220.0" y="112" font-size="14" font-weight="700" text-anchor="middle" fill="#1f2430">Wand firmware (ESP32)</text>
+<text x="220.0" y="129" font-size="11" font-weight="400" text-anchor="middle" fill="#5b6070">firmware/src/main.cpp + lib/wand_core</text>
+<rect x="430" y="92" width="380" height="46" rx="8" fill="#fbf3ea" stroke="#d9822b" stroke-width="1.5"/>
+<text x="620.0" y="112" font-size="14" font-weight="700" text-anchor="middle" fill="#1f2430">BLE_LINK messages</text>
+<text x="620.0" y="129" font-size="11" font-weight="400" text-anchor="middle" fill="#5b6070">docs/protocol.md</text>
+<rect x="830" y="92" width="380" height="46" rx="8" fill="#e6f5ec" stroke="#2f8f55" stroke-width="1.5"/>
+<text x="1020.0" y="112" font-size="14" font-weight="700" text-anchor="middle" fill="#1f2430">Mac app (Python)</text>
+<text x="1020.0" y="129" font-size="11" font-weight="400" text-anchor="middle" fill="#5b6070">mac_app/: app.py, controller.py, classifier.py, ...</text>
+<rect x="105.0" y="156" width="230" height="36" rx="18.0" fill="#e8eeff" stroke="#3d5bd9" stroke-width="1.5"/>
+<text x="220" y="179.0" font-size="13" font-weight="600" text-anchor="middle" fill="#1f2430">Power on (slide switch)</text>
+<polyline points="220,192 220,210" fill="none" stroke="#1f2430" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#arrow-ink)"/>
+<rect x="50" y="212" width="340" height="124" rx="8" fill="#e8eeff" stroke="#3d5bd9" stroke-width="1.5"/>
+<text x="64" y="236" font-size="13.5" font-weight="700" text-anchor="start" fill="#1f2430">setup()</text>
+<text x="64" y="256" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">Serial, CAST_BUTTON pull-up, RGB LED PWM</text>
+<text x="64" y="274" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">Find the IMU at 0x68 / 0x69, read WHO_AM_I</text>
+<text x="64" y="292" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">Set 100 Hz, ±8 g, ±2000 °/s, 45 Hz low-pass</text>
+<text x="64" y="310" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">Measure gyro offset (wand still, up to 3 s)</text>
+<text x="64" y="328" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">Start BLE, advertise "SpellWand"</text>
+<polyline points="220,338 220,360" fill="none" stroke="#1f2430" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#arrow-ink)"/>
+<rect x="30" y="362" width="380" height="600" rx="12" fill="none" stroke="#3d5bd9" stroke-width="1.5" stroke-dasharray="6 5"/>
+<text x="46" y="386" font-size="13.5" font-weight="700" text-anchor="start" fill="#3d5bd9">loop(): runs continuously</text>
+<rect x="50" y="402" width="340" height="70" rx="8" fill="#e8eeff" stroke="#3d5bd9" stroke-width="1.5"/>
+<text x="64" y="426" font-size="13.5" font-weight="700" text-anchor="start" fill="#1f2430">Read the IMU (new reading every 10 ms)</text>
+<text x="64" y="446" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">convert to m/s² and rad/s, subtract gyro offset;</text>
+<text x="64" y="464" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">while IDLE, keep re-measuring the offset</text>
+<polyline points="220,472 220,490" fill="none" stroke="#1f2430" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#arrow-ink)"/>
+<rect x="50" y="488" width="340" height="52" rx="8" fill="#e8eeff" stroke="#3d5bd9" stroke-width="1.5"/>
+<text x="64" y="512" font-size="13.5" font-weight="700" text-anchor="start" fill="#1f2430">If CASTING: send MOTION_SAMPLE</text>
+<text x="64" y="532" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">index, time, accel, gyro (19 bytes)</text>
+<polyline points="220,540 220,558" fill="none" stroke="#1f2430" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#arrow-ink)"/>
+<rect x="50" y="560" width="340" height="70" rx="8" fill="#e8eeff" stroke="#3d5bd9" stroke-width="1.5"/>
+<text x="64" y="584" font-size="13.5" font-weight="700" text-anchor="start" fill="#1f2430">Handle commands from the Mac</text>
+<text x="64" y="604" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">START / STOP_RECORDING, GESTURE_RESULT,</text>
+<text x="64" y="622" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">EXECUTE_ACTION (replies ACTION_COMPLETE)</text>
+<polyline points="220,630 220,648" fill="none" stroke="#1f2430" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#arrow-ink)"/>
+<rect x="50" y="648" width="340" height="70" rx="8" fill="#e8eeff" stroke="#3d5bd9" stroke-width="1.5"/>
+<text x="64" y="672" font-size="13.5" font-weight="700" text-anchor="start" fill="#1f2430">Read CAST_BUTTON (debounced 30 ms)</text>
+<text x="64" y="692" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">pressed in IDLE: CAST_START, now CASTING</text>
+<text x="64" y="710" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">released: CAST_END, now INFLIGHT (amber)</text>
+<polyline points="220,718 220,736" fill="none" stroke="#1f2430" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#arrow-ink)"/>
+<rect x="50" y="736" width="340" height="70" rx="8" fill="#e8eeff" stroke="#3d5bd9" stroke-width="1.5"/>
+<text x="64" y="760" font-size="13.5" font-weight="700" text-anchor="start" fill="#1f2430">tick(): time limits</text>
+<text x="64" y="780" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">cast 3 s / recording 5 s: CAST_END</text>
+<text x="64" y="798" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">no GESTURE_RESULT within 2 s: magenta flashes</text>
+<polyline points="220,806 220,824" fill="none" stroke="#1f2430" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#arrow-ink)"/>
+<rect x="50" y="824" width="340" height="52" rx="8" fill="#e8eeff" stroke="#3d5bd9" stroke-width="1.5"/>
+<text x="64" y="848" font-size="13.5" font-weight="700" text-anchor="start" fill="#1f2430">Update STATUS_LED and action LED</text>
+<text x="64" y="868" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">state colour, spell colour, or flashes</text>
+<polyline points="220,876 220,898 40,898 40,437.0 48,437.0" fill="none" stroke="#1f2430" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#arrow-ink)"/>
+<text x="56" y="916" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6070" font-style="italic">back to the top</text>
+<text x="30" y="990" font-size="12" font-weight="400" text-anchor="start" fill="#5b6070" font-style="italic">States IDLE / CASTING / INFLIGHT in detail: wand_states.svg</text>
+<rect x="875.0" y="156" width="290" height="36" rx="18.0" fill="#e6f5ec" stroke="#2f8f55" stroke-width="1.5"/>
+<text x="1020" y="179.0" font-size="13" font-weight="600" text-anchor="middle" fill="#1f2430">python3 app.py   (or --simulate)</text>
+<polyline points="1020,192 1020,210" fill="none" stroke="#1f2430" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#arrow-ink)"/>
+<rect x="850" y="212" width="340" height="124" rx="8" fill="#e6f5ec" stroke="#2f8f55" stroke-width="1.5"/>
+<text x="864" y="236" font-size="13.5" font-weight="700" text-anchor="start" fill="#1f2430">Startup</text>
+<text x="864" y="256" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">Load config.json: threshold, gestures, colours</text>
+<text x="864" y="274" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">Load samples from data/, fit the classifier</text>
+<text x="864" y="292" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">Connect: BLE Manager (Bleak) or simulated wand</text>
+<text x="864" y="310" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">Open the SpellWand UI in the browser</text>
+<text x="864" y="328" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">(live updates through server-sent events)</text>
+<polyline points="1020,338 1020,360" fill="none" stroke="#1f2430" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#arrow-ink)"/>
+<rect x="830" y="362" width="380" height="712" rx="12" fill="none" stroke="#2f8f55" stroke-width="1.5" stroke-dasharray="6 5"/>
+<text x="846" y="386" font-size="13.5" font-weight="700" text-anchor="start" fill="#2f8f55">controller.py: for each message from the wand</text>
+<rect x="850" y="402" width="340" height="40" rx="8" fill="#e6f5ec" stroke="#2f8f55" stroke-width="1.5"/>
+<text x="864" y="426" font-size="13.5" font-weight="700" text-anchor="start" fill="#1f2430">Decode the message (protocol.py)</text>
+<polyline points="1020,442 1020,460" fill="none" stroke="#1f2430" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#arrow-ink)"/>
+<rect x="850" y="460" width="340" height="106" rx="8" fill="#e6f5ec" stroke="#2f8f55" stroke-width="1.5"/>
+<text x="864" y="484" font-size="13.5" font-weight="700" text-anchor="start" fill="#1f2430">Depending on the message</text>
+<text x="864" y="504" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">CAST_START: clear the buffer, UI shows Casting…</text>
+<text x="864" y="522" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">MOTION_SAMPLE: add to buffer, live charts</text>
+<text x="864" y="540" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">ACTION_COMPLETE: give to the Action Dispatcher</text>
+<text x="864" y="558" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">CAST_END: continue below</text>
+<polyline points="940,566 940,588" fill="none" stroke="#1f2430" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#arrow-ink)"/>
+<path d="M940,588 L1036,620 L940,652 L844,620 Z" fill="#e6f5ec" stroke="#2f8f55" stroke-width="1.5" stroke-linejoin="round"/>
+<text x="940" y="616" font-size="12.5" font-weight="600" text-anchor="middle" fill="#1f2430">Training</text>
+<text x="940" y="632" font-size="12.5" font-weight="600" text-anchor="middle" fill="#1f2430">recording?</text>
+<polyline points="1036,620 1076,620" fill="none" stroke="#1f2430" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#arrow-ink)"/>
+<text x="1044" y="612" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6070">yes</text>
+<rect x="1078" y="584" width="122" height="74" rx="8" fill="#e6f5ec" stroke="#2f8f55" stroke-width="1.5"/>
+<text x="1086" y="602" font-size="11.5" font-weight="400" text-anchor="start" fill="#1f2430">Sample Recorder:</text>
+<text x="1086" y="618" font-size="11.5" font-weight="400" text-anchor="start" fill="#1f2430">≥ 10 samples? save</text>
+<text x="1086" y="634" font-size="11.5" font-weight="400" text-anchor="start" fill="#1f2430">CSV, retrain</text>
+<polyline points="940,652 940,674" fill="none" stroke="#1f2430" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#arrow-ink)"/>
+<text x="948" y="668" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6070">no</text>
+<rect x="850" y="676" width="340" height="70" rx="8" fill="#e6f5ec" stroke="#2f8f55" stroke-width="1.5"/>
+<text x="864" y="700" font-size="13.5" font-weight="700" text-anchor="start" fill="#1f2430">Gesture Classifier (classifier.py)</text>
+<text x="864" y="720" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">GestureResult: label or UNKNOWN, distance,</text>
+<text x="864" y="738" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">nearest gesture (see classifier_pipeline.svg)</text>
+<polyline points="1020,746 1020,764" fill="none" stroke="#1f2430" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#arrow-ink)"/>
+<rect x="850" y="764" width="340" height="52" rx="8" fill="#e6f5ec" stroke="#2f8f55" stroke-width="1.5"/>
+<text x="864" y="788" font-size="13.5" font-weight="700" text-anchor="start" fill="#1f2430">Send GESTURE_RESULT</text>
+<text x="864" y="808" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">label + colour from config.json</text>
+<polyline points="1020,816 1020,834" fill="none" stroke="#1f2430" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#arrow-ink)"/>
+<rect x="850" y="834" width="340" height="52" rx="8" fill="#e6f5ec" stroke="#2f8f55" stroke-width="1.5"/>
+<text x="864" y="858" font-size="13.5" font-weight="700" text-anchor="start" fill="#1f2430">Show the result in the UI</text>
+<text x="864" y="878" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">label, distance, 3D trail, live charts</text>
+<polyline points="1020,886 1020,920" fill="none" stroke="#1f2430" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#arrow-ink)"/>
+<path d="M1020,920 L1140,952 L1020,984 L900,952 Z" fill="#e6f5ec" stroke="#2f8f55" stroke-width="1.5" stroke-linejoin="round"/>
+<text x="1020" y="948" font-size="12.5" font-weight="600" text-anchor="middle" fill="#1f2430">Not UNKNOWN and</text>
+<text x="1020" y="964" font-size="12.5" font-weight="600" text-anchor="middle" fill="#1f2430">an action is set?</text>
+<text x="1148" y="948" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6070">no: done</text>
+<polyline points="1020,984 1020,1000" fill="none" stroke="#1f2430" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#arrow-ink)"/>
+<text x="1028" y="996" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6070">yes</text>
+<rect x="850" y="1002" width="340" height="70" rx="8" fill="#e6f5ec" stroke="#2f8f55" stroke-width="1.5"/>
+<text x="864" y="1026" font-size="13.5" font-weight="700" text-anchor="start" fill="#1f2430">Action Dispatcher</text>
+<text x="864" y="1046" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">wand LED (EXECUTE_ACTION), notification,</text>
+<text x="864" y="1064" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">or web request (e.g. Home Assistant)</text>
+<rect x="850" y="1094" width="340" height="52" rx="8" fill="#f4f5f8" stroke="#8a8fa0" stroke-width="1.5"/>
+<text x="864" y="1118" font-size="13.5" font-weight="700" text-anchor="start" fill="#1f2430">Training buttons in the SpellWand UI</text>
+<text x="864" y="1138" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">Start recording / Stop and save</text>
+<polyline points="390,514.0 600,514.0" fill="none" stroke="#d9822b" stroke-width="2.2" stroke-linejoin="round"/>
+<text x="398" y="507.0" font-size="11.5" font-weight="600" text-anchor="start" fill="#d9822b" paint-order="stroke" stroke="#ffffff" stroke-width="5" stroke-linejoin="round">MOTION_SAMPLE ×N (≈100/s)</text>
+<polyline points="390,584 600,584" fill="none" stroke="#d9822b" stroke-width="2.2" stroke-linejoin="round"/>
+<text x="398" y="577" font-size="11.5" font-weight="600" text-anchor="start" fill="#d9822b" paint-order="stroke" stroke="#ffffff" stroke-width="5" stroke-linejoin="round">ACTION_COMPLETE</text>
+<polyline points="390,683.0 600,683.0" fill="none" stroke="#d9822b" stroke-width="2.2" stroke-linejoin="round"/>
+<text x="398" y="676.0" font-size="11.5" font-weight="600" text-anchor="start" fill="#d9822b" paint-order="stroke" stroke="#ffffff" stroke-width="5" stroke-linejoin="round">CAST_START / CAST_END</text>
+<polyline points="390,771.0 600,771.0" fill="none" stroke="#d9822b" stroke-width="2.2" stroke-linejoin="round"/>
+<text x="398" y="764.0" font-size="11.5" font-weight="600" text-anchor="start" fill="#d9822b" paint-order="stroke" stroke="#ffffff" stroke-width="5" stroke-linejoin="round">CAST_END (time limit)</text>
+<polyline points="600,771.0 600,422.0 848,422.0" fill="none" stroke="#d9822b" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#arrow-tomac)"/>
+<text x="612" y="414.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#d9822b" font-style="italic" paint-order="stroke" stroke="#ffffff" stroke-width="5" stroke-linejoin="round">to the Mac (BLE notify)</text>
+<polyline points="850,790.0 660,790.0" fill="none" stroke="#7b4fd6" stroke-width="2.2" stroke-linejoin="round"/>
+<text x="842" y="783.0" font-size="11.5" font-weight="600" text-anchor="end" fill="#7b4fd6" paint-order="stroke" stroke="#ffffff" stroke-width="5" stroke-linejoin="round">GESTURE_RESULT</text>
+<polyline points="850,1026 660,1026" fill="none" stroke="#7b4fd6" stroke-width="2.2" stroke-linejoin="round"/>
+<text x="842" y="1019" font-size="11.5" font-weight="600" text-anchor="end" fill="#7b4fd6" paint-order="stroke" stroke="#ffffff" stroke-width="5" stroke-linejoin="round">EXECUTE_ACTION</text>
+<polyline points="850,1120.0 660,1120.0" fill="none" stroke="#7b4fd6" stroke-width="2.2" stroke-linejoin="round"/>
+<text x="842" y="1113.0" font-size="11.5" font-weight="600" text-anchor="end" fill="#7b4fd6" paint-order="stroke" stroke="#ffffff" stroke-width="5" stroke-linejoin="round">START_ / STOP_RECORDING</text>
+<path d="M660,1120.0 L660,616 L607,616 A7,7 0 0 0 593,616 L392,616" fill="none" stroke="#7b4fd6" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#arrow-towand)"/>
+<text x="486" y="634" font-size="11.5" font-weight="400" text-anchor="middle" fill="#7b4fd6" font-style="italic" paint-order="stroke" stroke="#ffffff" stroke-width="5" stroke-linejoin="round">to the wand (BLE write)</text>
+</svg>

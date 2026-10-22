@@ -131,6 +131,10 @@ ESP32  ──BLE_LINK──>  ble_manager.py ──> controller.py ──> class
 
 `simulator.py` can stand in for the ESP32 at the left end (`app.py --simulate`, and the tests).
 
+**Diagrams** (SVG and PNG) in `docs/diagrams/`: `code_flowchart`, `wand_states`, `classifier_pipeline` and
+`circuit`. They're drawn by `python3 docs/diagrams/make_diagrams.py` (plain Python), so edit that script and
+rerun it when the design changes.
+
 ## Progress
 
 | Step | Status |
