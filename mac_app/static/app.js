@@ -10,7 +10,6 @@ const MOTION_NAMES = {
   WOBBLE: "Wave it around",
   STILL: "Hold it still",
 };
-const LED_MODES = { toggle: "Toggle it", pulse: "Flash it briefly" };
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const plotConfig = { displayModeBar: false, responsive: true };
 
@@ -256,7 +255,6 @@ function showResult(result) {
 
 function showAction(outcome) {
   const done = {
-    wand_led: "Switched the LED on the wand.",
     notify: "Showed a Mac notification.",
     webhook: `Sent the web request (${outcome.detail}).`,
   };
@@ -273,12 +271,7 @@ function actionEditor(action) {
   const extra = el("div", { className: "action-extra" });
   const renderExtra = () => {
     const kind = type.value;
-    if (kind === "wand_led") {
-      const mode = el("select", { className: "action-mode", "aria-label": "LED behaviour" },
-        state.meta.wand_led_modes.map((value) => el("option", { value }, LED_MODES[value] ?? value)));
-      mode.value = action.mode ?? "toggle";
-      extra.replaceChildren(mode);
-    } else if (kind === "notify") {
+    if (kind === "notify") {
       extra.replaceChildren(el("input", { type: "text", className: "action-message", placeholder: "Message to show",
         value: action.message ?? "", maxLength: 200, "aria-label": "Notification message" }));
     } else if (kind === "webhook") {
@@ -327,7 +320,6 @@ function readConfigForm() {
   for (const row of $("gesture-rows").children) {
     const type = row.querySelector(".action-type").value;
     const action = { type };
-    if (type === "wand_led") action.mode = row.querySelector(".action-mode").value;
     if (type === "notify") action.message = row.querySelector(".action-message").value;
     if (type === "webhook") action.url = row.querySelector(".action-url").value;
     gestures[row.dataset.label] = { color: row.querySelector(".gesture-color").value, action };

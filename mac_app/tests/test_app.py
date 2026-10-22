@@ -32,7 +32,8 @@ class AppTest(unittest.TestCase):
         save_config(DEFAULT_CONFIG, config_path)
         self.controller = SpellWandController(data_dir=self.data_dir, config_path=config_path,
                                               run_in_background=lambda task: task(),
-                                              simulator_realtime=False, simulator_seed=4)
+                                              simulator_realtime=False, simulator_seed=4,
+                                              notifier=lambda message: True)
         self.controller.connect("simulated")
         self.client = create_app(self.controller).test_client()
 
@@ -109,6 +110,7 @@ class AppTest(unittest.TestCase):
     def test_action_types_are_listed_for_the_settings_form(self):
         meta = self.client.get("/api/meta").get_json()
         self.assertIn("webhook", meta["action_types"])
+        self.assertNotIn("wand_led", meta["action_types"])
         self.assertEqual(meta["simulated_motions"][:3], list(GESTURES))
 
     def test_form_posts_from_other_websites_are_refused(self):

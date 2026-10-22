@@ -33,8 +33,10 @@ class ControllerTest(unittest.TestCase):
             for _ in range(5):
                 save_sample(make_gesture(gesture, rng), self.data_dir)
         save_config(DEFAULT_CONFIG, self.config_path)
+        self.notifications = []
         self.app = SpellWandController(data_dir=self.data_dir, config_path=self.config_path,
-                                       run_in_background=run_inline, simulator_realtime=False, simulator_seed=11)
+                                       run_in_background=run_inline, simulator_realtime=False, simulator_seed=11,
+                                       notifier=lambda message: self.notifications.append(message) or True)
         self.events = self.app.subscribe()
         self.app.connect("simulated")
         self.wand = self.app.simulated_wand
@@ -75,14 +77,14 @@ class ControllerTest(unittest.TestCase):
         self.assertEqual(labels, ["UNKNOWN"] * 5)
         self.assertEqual({rgb for _, rgb in self.wand.feedback_log}, {(255, 0, 0)})
         self.assertEqual(self.published("action"), [])
-        self.assertFalse(self.wand.action_led_on)
+        self.assertEqual(self.notifications, [])
 
     def test_recognized_gesture_runs_its_action(self):
-        # Default config: CIRCLE toggles the wand's action LED.
+        # Default config: CIRCLE shows a Mac notification.
         self.wand.cast("CIRCLE")
         [action] = self.published("action")
         self.assertTrue(action["ok"], action["detail"])
-        self.assertTrue(self.wand.action_led_on)
+        self.assertEqual(self.notifications, ["Circle cast!"])
 
     def test_result_includes_the_motion_for_the_ui(self):
         self.wand.cast("ZIGZAG")

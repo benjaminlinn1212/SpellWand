@@ -162,8 +162,7 @@ def code_flowchart():
     send, send_h = step(d, wx, 488, ww, "If CASTING: send MOTION_SAMPLE", ["index, time, accel, gyro (19 bytes)"], WAND)
     flow_arrow(d, read, send)
     commands, commands_h = step(d, wx, 560, ww, "Handle commands from the Mac", [
-        "START / STOP_RECORDING, GESTURE_RESULT,",
-        "EXECUTE_ACTION (replies ACTION_COMPLETE)"], WAND)
+        "START / STOP_RECORDING, GESTURE_RESULT"], WAND)
     flow_arrow(d, send, commands)
     button, button_h = step(d, wx, 648, ww, "Read CAST_BUTTON (debounced 30 ms)", [
         "pressed in IDLE: CAST_START, now CASTING",
@@ -173,7 +172,7 @@ def code_flowchart():
         "cast 3 s / recording 5 s: CAST_END",
         "no GESTURE_RESULT within 2 s: magenta flashes"], WAND)
     flow_arrow(d, button, tick)
-    leds, leds_h = step(d, wx, 824, ww, "Update STATUS_LED and action LED", ["state colour, spell colour, or flashes"], WAND)
+    leds, leds_h = step(d, wx, 824, ww, "Update STATUS_LED", ["state colour, spell colour, or flashes"], WAND)
     flow_arrow(d, tick, leds)
     loop_y = 824 + leds_h + 22
     d.edge(leds, read, f"edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor={INK};"
@@ -198,7 +197,6 @@ def code_flowchart():
     depending, _ = step(d, mx, 460, mw, "Depending on the message", [
         "CAST_START: clear the buffer, UI shows Casting…",
         "MOTION_SAMPLE: add to buffer, live charts",
-        "ACTION_COMPLETE: give to the Action Dispatcher",
         "CAST_END: continue below"], MAC)
     flow_arrow(d, decode, depending)
     rhombus = "rhombus;whiteSpace=wrap;html=1;fontStyle=1;fontSize=12.5;" + f"fillColor={MAC[0]};strokeColor={MAC[1]};"
@@ -218,9 +216,9 @@ def code_flowchart():
     has_action = d.vertex("Not UNKNOWN and<br>an action is set?", 900, 920, 240, 64, rhombus)
     flow_arrow(d, show, has_action)
     d.text("no: done", 1146, 942, 70, 20, size=11.5, colour=MUTED)
-    action, action_h = step(d, mx, 1002, mw, "Action Dispatcher", [
-        "wand LED (EXECUTE_ACTION), notification,",
-        "or web request (e.g. Home Assistant)"], MAC)
+    action, _ = step(d, mx, 1002, mw, "Action Dispatcher", [
+        "Mac notification, or web request",
+        "(e.g. a Home Assistant webhook)"], MAC)
     flow_arrow(d, has_action, action, "yes")
     training_ui, training_ui_h = step(d, mx, 1094, mw, "Training buttons in the SpellWand UI",
                                       ["Start recording / Stop and save"], NEUTRAL)
@@ -232,7 +230,6 @@ def code_flowchart():
     decode_y = 402 + decode_h / 2
     for source, top, height, line_y, label in [
         (send, 488, send_h, 488 + send_h / 2, "MOTION_SAMPLE ×N (≈100/s)"),
-        (commands, 560, commands_h, 584, "ACTION_COMPLETE"),
         (button, 648, button_h, 648 + button_h / 2, "CAST_START / CAST_END"),
         (tick, 736, tick_h, 736 + tick_h / 2, "CAST_END (time limit)"),
     ]:
@@ -245,7 +242,6 @@ def code_flowchart():
     command_in_y = 560 + commands_h - 14
     for source, top, height, line_y, label in [
         (result, 764, result_h, 764 + result_h / 2, "GESTURE_RESULT"),
-        (action, 1002, action_h, 1026, "EXECUTE_ACTION"),
         (training_ui, 1094, training_ui_h, 1094 + training_ui_h / 2, "START_ / STOP_RECORDING"),
     ]:
         pts = [(850, line_y), (bus_b, line_y), (bus_b, command_in_y), (390, command_in_y)]
@@ -287,11 +283,11 @@ def ground_at(d, x, y):
 def circuit():
     d = Drawio("Circuit", 1180, 800)
     d.text("SpellWand: circuit (mpu9250 branch)", 30, 22, 700, 30, size=22, bold=True)
-    d.text("ESP32 dev board, MPU-9250/6500 IMU, RGB status LED, cast button, optional action LED, "
+    d.text("ESP32 dev board, MPU-9250/6500 IMU, RGB status LED, cast button, "
            "4× AAA with a slide switch.", 30, 52, 1000, 20, size=13, colour=MUTED)
 
     # ESP32 board; wires attach at the pin heights
-    ex, ey, ew, eh = 440, 104, 240, 580
+    ex, ey, ew, eh = 440, 104, 240, 480
     esp = d.vertex("<b style='font-size:15px'>ESP32-WROOM-32</b><br><span style='color:#5b6070'>dev board (1117 regulator)</span>",
                    ex, ey, ew, eh, "rounded=1;arcSize=3;whiteSpace=wrap;html=1;verticalAlign=top;spacingTop=10;"
                                    "fillColor=#f4f6fb;strokeColor=#1f2430;strokeWidth=2;fontSize=12;")
@@ -301,7 +297,7 @@ def circuit():
 
     left = {"5V / VIN": 210, "GND": 300, "3V3": 390}
     right = {"GPIO21 (SDA)": 168, "GPIO22 (SCL)": 208, "GPIO18": 350, "GPIO19": 390, "GPIO23": 430,
-             "GPIO27": 530, "GPIO26": 630}
+             "GPIO27": 530}
     for name, y in left.items():
         d.text(name, ex + 10, y - 10, 110, 20, size=12.5, bold=True)
     for name, y in right.items():
@@ -366,17 +362,6 @@ def circuit():
     button_ground = ground_at(d, 930, 546)
     wire(d, button, button_ground, INK, exit_at=(1, 0.8), entry_at=(0.5, 0), points=[(930, 530)])
     d.text("uses the ESP32's internal pull-up", 706, 540, 200, 16, size=10.5, colour=MUTED)
-
-    # Optional action LED
-    d.vertex("", 708, 596, 260, 88, "rounded=1;arcSize=6;dashed=1;fillColor=none;strokeColor=#8a8fa0;")
-    d.text("Optional: action LED (EXECUTE_ACTION demo)", 678, 576, 320, 18, size=11.5, bold=True, align="center")
-    r4 = part(d, RESISTOR, "R4 330 Ω", 716, 623, 64, 14, label_on="top")
-    action_led = part(d, LED, "", 836, 630 - 0.5385 * 32, 50, 32, label_on="none", extra="fillColor=#f2b705;")
-    wire(d, esp, r4, SIGNAL, exit_at=pin(630, "right"), entry_at=(0, 0.5))
-    wire(d, r4, action_led, SIGNAL, exit_at=(1, 0.5), entry_at=(0, LED[1]))
-    action_ground = ground_at(d, 930, 646)
-    wire(d, action_led, action_ground, INK, exit_at=(1, LED[1]), entry_at=(0.5, 0), points=[(930, 630)])
-    d.text("long leg → R4", 780, 652, 100, 16, size=10.5, colour=MUTED, align="center")
 
     # Notes
     notes = "<br>".join([

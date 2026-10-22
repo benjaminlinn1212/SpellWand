@@ -80,12 +80,10 @@ class SimulatedWandTest(unittest.TestCase):
         self.assertEqual(self.log.events[-1], CastEnd(sample_count=len(samples), reason=0))
         self.assertEqual(self.wand.state, "IDLE")
 
-    def test_execute_action_switches_the_action_led_and_replies(self):
+    def test_wand_without_action_outputs_answers_not_done(self):
+        # EXECUTE_ACTION stays in the protocol, but this wand has nothing to switch.
         self.wand.send(encode_execute_action(1))
-        self.assertTrue(self.wand.action_led_on)
-        self.wand.send(encode_execute_action(99))
-        self.assertEqual(self.log.of_type(ActionComplete),
-                         [ActionComplete(action=1, ok=True), ActionComplete(action=99, ok=False)])
+        self.assertEqual(self.log.of_type(ActionComplete), [ActionComplete(action=1, ok=False)])
 
     def test_nothing_is_sent_while_disconnected(self):
         self.wand.disconnect()

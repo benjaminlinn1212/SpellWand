@@ -23,7 +23,7 @@ The first byte is the message type. Numbers are little-endian.
 | `0x01` | `CAST_START` | source `u8`: 0 = `CAST_BUTTON` held, 1 = `START_RECORDING` from the Mac | 2 |
 | `0x02` | `MOTION_SAMPLE` | index `u16` (0, 1, 2, ... per cast), t_ms `u32` (ESP32 `millis()`), ax ay az `i16` in 0.01 m/s², gx gy gz `i16` in 0.001 rad/s | 19 |
 | `0x03` | `CAST_END` | sample count `u16`, reason `u8`: 0 = button released / `STOP_RECORDING`, 1 = maximum duration reached, 2 = connection lost | 4 |
-| `0x04` | `ACTION_COMPLETE` | action `u8` (echo of `EXECUTE_ACTION`), ok `u8` (1 = done, 0 = unknown action) | 3 |
+| `0x04` | `ACTION_COMPLETE` | *Reserved.* action `u8` (echo of `EXECUTE_ACTION`), ok `u8` (1 = done, 0 = not done) | 3 |
 
 Values are rounded to the nearest step and clamped to the `i16` range: ±327.67 m/s² for the
 accelerometer and ±32.767 rad/s (about 1877 °/s) for the gyroscope.
@@ -35,7 +35,7 @@ accelerometer and ±32.767 rad/s (about 1877 °/s) for the gyroscope.
 | `0x81` | `START_RECORDING` | none | 1 |
 | `0x82` | `STOP_RECORDING` | none | 1 |
 | `0x83` | `GESTURE_RESULT` | r g b `u8`: the spell colour, shown exactly as sent; then the `GestureLabel` in ASCII, 1–16 characters | 5–20 |
-| `0x84` | `EXECUTE_ACTION` | action `u8`: 1 = toggle the action LED, 2 = pulse the action LED for 0.5 s | 2 |
+| `0x84` | `EXECUTE_ACTION` | *Reserved* for a future output on the wand (e.g. a vibration motor): action `u8`. The current wand has no outputs and always replies `ACTION_COMPLETE(ok=0)` | 2 |
 
 ## Typical exchanges
 
@@ -47,9 +47,9 @@ ESP32: MOTION_SAMPLE x N (about 100 Hz)
 ESP32: CAST_END(count=N, reason=0)     state CASTING -> INFLIGHT, LED amber
 Mac:   GESTURE_RESULT(colour, "CIRCLE")  LED shows that colour (three flashes of it for UNKNOWN)
                                        state INFLIGHT -> IDLE after the feedback
-Mac:   EXECUTE_ACTION(1)               (only if the gesture is mapped to the wand's action LED)
-ESP32: ACTION_COMPLETE(1, ok=1)
 ```
+
+The gesture's action (a Mac notification or a web request) then runs on the Mac; the wand isn't involved.
 
 **Spell colours have one home: the Mac's `config.json`** (edited in the SpellWand UI, including the
 colour for `UNKNOWN`). The wand has no spell colours of its own; it only owns the colours of its states

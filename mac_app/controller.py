@@ -20,12 +20,12 @@ from dataclasses import asdict
 
 import numpy as np
 
-from action_dispatcher import ActionDispatcher
+from action_dispatcher import ActionDispatcher, show_mac_notification
 from classifier import MIN_SAMPLES, GestureClassifier, leave_one_out
 from config import CONFIG_PATH, load_config, save_config
 from motion_trace import tip_trace
 from protocol import (
-    ActionComplete, CastEnd, CastStart, MotionSample, ProtocolError, END_MAX_DURATION, SOURCE_RECORDING,
+    CastEnd, CastStart, MotionSample, ProtocolError, END_MAX_DURATION, SOURCE_RECORDING,
     decode_event, encode_gesture_result, encode_start_recording, encode_stop_recording,
 )
 from recorder import DATA_DIR, delete_sample, list_samples, load_dataset, load_sample, save_sample, sequence_from_samples
@@ -49,12 +49,12 @@ def _finite(value):
 
 class SpellWandController:
     def __init__(self, data_dir=DATA_DIR, config_path=CONFIG_PATH, run_in_background=run_in_thread,
-                 simulator_realtime=True, simulator_seed=None):
+                 simulator_realtime=True, simulator_seed=None, notifier=show_mac_notification):
         self.data_dir = data_dir
         self.config_path = config_path
         self.config = load_config(config_path)
         self.classifier = GestureClassifier(self.config["dtw_threshold"])
-        self.dispatcher = ActionDispatcher(send_to_wand=self._send)
+        self.dispatcher = ActionDispatcher(notifier=notifier)
         self._background = run_in_background
         self._simulator_realtime = simulator_realtime
         self._simulator_seed = simulator_seed
@@ -216,6 +216,7 @@ class SpellWandController:
             self._publish("message", {"level": "warning", "text": f"Ignored a bad message from the wand: {error}"})
             return
 
+        # ACTION_COMPLETE is ignored: this wand has no action outputs, so nothing waits for it.
         if isinstance(event, CastStart):
             with self._lock:
                 self._cast_source = event.source
@@ -249,9 +250,6 @@ class SpellWandController:
                 self._background(lambda: self._finish_recording(samples, label, event))
             else:
                 self._background(lambda: self._finish_cast(samples, event))
-
-        elif isinstance(event, ActionComplete):
-            self.dispatcher.action_complete(event)
 
     def _finish_cast(self, samples, end):
         sequence = sequence_from_samples(samples)

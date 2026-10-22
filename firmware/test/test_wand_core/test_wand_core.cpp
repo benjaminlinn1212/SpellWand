@@ -6,7 +6,6 @@
 #include <string.h>
 #include <unity.h>
 
-#include "action_output.h"
 #include "debouncer.h"
 #include "gyro_bias.h"
 #include "imu_units.h"
@@ -313,31 +312,6 @@ static void test_connection_loss_ends_a_recording() {
   TEST_ASSERT_EQUAL(protocol::END_CONNECTION_LOST, events.reason);
 }
 
-// ---------- action LED (EXECUTE_ACTION) ----------
-
-static void test_toggle_switches_the_action_led() {
-  ActionOutput output;
-  TEST_ASSERT_FALSE(output.level(0));
-  TEST_ASSERT_TRUE(output.execute(protocol::ACTION_TOGGLE_LED, 0));
-  TEST_ASSERT_TRUE(output.level(1));
-  TEST_ASSERT_TRUE(output.execute(protocol::ACTION_TOGGLE_LED, 2));
-  TEST_ASSERT_FALSE(output.level(3));
-}
-
-static void test_pulse_lights_the_action_led_briefly() {
-  ActionOutput output;
-  TEST_ASSERT_TRUE(output.execute(protocol::ACTION_PULSE_LED, 1000));
-  TEST_ASSERT_TRUE(output.level(1000));
-  TEST_ASSERT_TRUE(output.level(1000 + ActionOutput::PULSE_MS - 1));
-  TEST_ASSERT_FALSE(output.level(1000 + ActionOutput::PULSE_MS));
-}
-
-static void test_unknown_action_is_refused() {
-  ActionOutput output;
-  TEST_ASSERT_FALSE(output.execute(99, 0));
-  TEST_ASSERT_FALSE(output.level(0));
-}
-
 // ---------- MPU-9250 / MPU-6500 raw data ----------
 
 static void test_register_bytes_combine_high_byte_first() {
@@ -471,9 +445,6 @@ int main() {
   RUN_TEST(test_recording_stops_itself_at_maximum_duration);
   RUN_TEST(test_commands_that_do_not_fit_the_state_are_ignored);
   RUN_TEST(test_connection_loss_ends_a_recording);
-  RUN_TEST(test_toggle_switches_the_action_led);
-  RUN_TEST(test_pulse_lights_the_action_led_briefly);
-  RUN_TEST(test_unknown_action_is_refused);
   RUN_TEST(test_register_bytes_combine_high_byte_first);
   RUN_TEST(test_raw_readings_convert_to_si_units);
   RUN_TEST(test_holding_still_reveals_the_gyro_offset);

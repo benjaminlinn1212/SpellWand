@@ -15,17 +15,15 @@ CONFIG_PATH = Path(__file__).parent / "config.json"
 
 ACTION_TYPES = {
     "none": "Do nothing",
-    "wand_led": "Switch wand LED",       # EXECUTE_ACTION to the wand's action LED
     "notify": "Show notification",       # macOS notification
     "webhook": "Send web request",       # e.g. a Home Assistant webhook
 }
-WAND_LED_MODES = ("toggle", "pulse")
 
 DEFAULT_CONFIG = {
     "dtw_threshold": 1.0,
     "unknown_color": "#ff0000",
     "gestures": {
-        "CIRCLE": {"color": "#0050ff", "action": {"type": "wand_led", "mode": "toggle"}},
+        "CIRCLE": {"color": "#0050ff", "action": {"type": "notify", "message": "Circle cast!"}},
         "ZIGZAG": {"color": "#ff4000", "action": {"type": "notify", "message": "Zigzag cast!"}},
         "HORIZONTAL_LINE": {"color": "#00c828", "action": {"type": "none"}},
     },
@@ -96,13 +94,12 @@ def _colour(value, name):
 
 
 def _action(action, label):
+    if isinstance(action, dict) and action.get("type") == "wand_led":
+        # Older config files used the wand's action LED, which no longer exists.
+        return {"type": "notify", "message": f"{label} cast!"}
     if not isinstance(action, dict) or action.get("type") not in ACTION_TYPES:
         raise ConfigError(f"{label}: action type must be one of {', '.join(ACTION_TYPES)}")
     kind = action["type"]
-    if kind == "wand_led":
-        if action.get("mode") not in WAND_LED_MODES:
-            raise ConfigError(f"{label}: wand LED mode must be toggle or pulse")
-        return {"type": kind, "mode": action["mode"]}
     if kind == "notify":
         message = action.get("message")
         if not isinstance(message, str) or not 0 < len(message) <= 200:

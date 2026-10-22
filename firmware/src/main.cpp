@@ -5,7 +5,6 @@
 //   CAST_BUTTON        -> debounced, drives IDLE / CASTING / INFLIGHT
 //   STATUS_LED         -> colour from the state machine (4-leg RGB LED, PWM on three pins)
 //   BLE_LINK           -> events notified to the Mac, commands written by the Mac
-//   ACTION_LED         -> low-voltage LED the Mac can switch with EXECUTE_ACTION
 // Message format: docs/protocol.md
 
 #include <Arduino.h>
@@ -14,7 +13,6 @@
 #include <BLEServer.h>
 #include <Wire.h>
 
-#include "action_output.h"
 #include "debouncer.h"
 #include "gyro_bias.h"
 #include "imu_units.h"
@@ -29,7 +27,6 @@ static const int CAST_BUTTON_PIN = 27;  // to GND, internal pull-up: LOW = press
 static const int STATUS_LED_RED_PIN = 18;    // each through its resistor to the RGB LED's legs
 static const int STATUS_LED_GREEN_PIN = 19;
 static const int STATUS_LED_BLUE_PIN = 23;
-static const int ACTION_LED_PIN = 26;   // LED + 330 ohm resistor to GND
 
 // ---- Settings ----
 static const uint32_t SERIAL_BAUD = 115200;
@@ -153,7 +150,6 @@ class BleEvents : public WandEvents {
 static BleEvents bleEvents;
 static WandStateMachine wand(bleEvents);
 static Debouncer castButton;
-static ActionOutput actionLed;
 
 // ---------------------------------------------------------------------------
 // IMU
@@ -307,17 +303,17 @@ static void handleCommand(const protocol::Command& command, uint32_t now) {
       wand.gestureResult(command.label, command.color, now);
       break;
     case protocol::EXECUTE_ACTION: {
-      bool ok = actionLed.execute(command.action, now);
+      // Reserved in the protocol, but this wand has no action outputs: answer "not done".
       uint8_t buffer[protocol::MAX_MESSAGE_BYTES];
-      sendEvent(buffer, protocol::encodeActionComplete(buffer, command.action, ok));
-      Serial.printf("EXECUTE_ACTION %u: %s\n", (unsigned)command.action, ok ? "done" : "unknown action");
+      sendEvent(buffer, protocol::encodeActionComplete(buffer, command.action, false));
+      Serial.printf("EXECUTE_ACTION %u: no action outputs on this wand\n", (unsigned)command.action);
       break;
     }
   }
 }
 
 // ---------------------------------------------------------------------------
-// STATUS_LED (RGB LED on three PWM channels) and the action LED
+// STATUS_LED (RGB LED on three PWM channels)
 
 static const int LED_PINS[3] = {STATUS_LED_RED_PIN, STATUS_LED_GREEN_PIN, STATUS_LED_BLUE_PIN};
 
@@ -328,7 +324,7 @@ static void startStatusLed() {
   }
 }
 
-static void updateLeds(uint32_t now) {
+static void updateStatusLed(uint32_t now) {
   static Rgb shown = {1, 2, 3};  // impossible start value forces the first write
   Rgb c = wand.ledColor(now);
   if (c.r != shown.r || c.g != shown.g || c.b != shown.b) {
@@ -337,7 +333,6 @@ static void updateLeds(uint32_t now) {
     ledcWrite(1, rgb_led::duty(c.g, LED_BRIGHTNESS, STATUS_LED_COMMON_ANODE));
     ledcWrite(2, rgb_led::duty(c.b, LED_BRIGHTNESS, STATUS_LED_COMMON_ANODE));
   }
-  digitalWrite(ACTION_LED_PIN, actionLed.level(now) ? HIGH : LOW);
 }
 
 void setup() {
@@ -347,9 +342,8 @@ void setup() {
   Serial.println("=== SpellWand firmware booted ===");
 
   pinMode(CAST_BUTTON_PIN, INPUT_PULLUP);
-  pinMode(ACTION_LED_PIN, OUTPUT);
   startStatusLed();
-  updateLeds(millis());
+  updateStatusLed(millis());
 
   Wire.begin(IMU_SDA_PIN, IMU_SCL_PIN, I2C_CLOCK_HZ);
   imuReady = startImu();
@@ -388,5 +382,5 @@ void loop() {
     Serial.printf("State: %s\n", stateName(lastState));
   }
 
-  updateLeds(now);
+  updateStatusLed(now);
 }

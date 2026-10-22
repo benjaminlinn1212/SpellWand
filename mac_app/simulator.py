@@ -22,7 +22,7 @@ from classifier import GestureSequence
 from protocol import (
     ExecuteAction, GestureResult, MotionSample, StartRecording, StopRecording, decode_command,
     encode_action_complete, encode_cast_end, encode_cast_start, encode_motion_sample,
-    ACTION_PULSE_LED, ACTION_TOGGLE_LED, END_MAX_DURATION, END_NORMAL, SOURCE_CAST_BUTTON,
+    END_MAX_DURATION, END_NORMAL, SOURCE_CAST_BUTTON,
     SOURCE_RECORDING,
 )
 
@@ -179,7 +179,6 @@ class SimulatedWand:
         self.connected = False
         self.state = "IDLE"
         self.feedback_log = []     # (label, rgb) shown for each GESTURE_RESULT
-        self.action_led_on = False
         self._rng = np.random.default_rng(seed)
         self._lock = threading.RLock()
         self._source = SOURCE_CAST_BUTTON
@@ -216,10 +215,8 @@ class SimulatedWand:
                 self.feedback_log.append((command.label, command.rgb))
                 self.state = "IDLE"
             elif isinstance(command, ExecuteAction):
-                ok = command.action in (ACTION_TOGGLE_LED, ACTION_PULSE_LED)
-                if command.action == ACTION_TOGGLE_LED:
-                    self.action_led_on = not self.action_led_on
-                self._emit(encode_action_complete(command.action, ok))
+                # Like the firmware: this wand has no action outputs, so it answers "not done".
+                self._emit(encode_action_complete(command.action, False))
 
     # ---- the simulated user ----
 

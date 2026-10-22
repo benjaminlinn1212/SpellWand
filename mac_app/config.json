@@ -5,8 +5,8 @@
     "CIRCLE": {
       "color": "#0050ff",
       "action": {
-        "type": "wand_led",
-        "mode": "toggle"
+        "type": "notify",
+        "message": "Circle cast!"
       }
     },
     "ZIGZAG": {

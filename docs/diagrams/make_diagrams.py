@@ -159,10 +159,9 @@ def code_flowchart():
     down(svg, wc, y + h, y + h + 18)
     y = 560
     h = step(svg, wx, y, ww, "Handle commands from the Mac", [
-        "START / STOP_RECORDING, GESTURE_RESULT,",
-        "EXECUTE_ACTION (replies ACTION_COMPLETE)"], WAND)
-    command_out_y, command_in_y = y + 24, y + h - 14
-    down(svg, wc, y + h, y + h + 18)
+        "START / STOP_RECORDING, GESTURE_RESULT"], WAND)
+    command_in_y = y + h - 14
+    down(svg, wc, y + h, 646)
     y = 648
     h = step(svg, wx, y, ww, "Read CAST_BUTTON (debounced 30 ms)", [
         "pressed in IDLE: CAST_START, now CASTING",
@@ -176,7 +175,7 @@ def code_flowchart():
     tick_y = y + h / 2
     down(svg, wc, y + h, y + h + 18)
     y = 824
-    h = step(svg, wx, y, ww, "Update STATUS_LED and action LED", [
+    h = step(svg, wx, y, ww, "Update STATUS_LED", [
         "state colour, spell colour, or flashes"], WAND)
     svg.line([(wc, y + h), (wc, y + h + 22), (40, y + h + 22), (40, read_mid), (48, read_mid)],
              width=1.8, arrow="ink")
@@ -207,7 +206,6 @@ def code_flowchart():
     h = step(svg, mx, y, mw, "Depending on the message", [
         "CAST_START: clear the buffer, UI shows Casting…",
         "MOTION_SAMPLE: add to buffer, live charts",
-        "ACTION_COMPLETE: give to the Action Dispatcher",
         "CAST_END: continue below"], MAC)
     down(svg, 940, y + h, 588)
 
@@ -238,9 +236,8 @@ def code_flowchart():
     svg.text(mc + 8, 996, "yes", size=11.5, fill=MUTED)
     y = 1002
     h = step(svg, mx, y, mw, "Action Dispatcher", [
-        "wand LED (EXECUTE_ACTION), notification,",
-        "or web request (e.g. Home Assistant)"], MAC)
-    action_y = y + 24
+        "Mac notification, or web request",
+        "(e.g. a Home Assistant webhook)"], MAC)
 
     y = 1094
     h = step(svg, mx, y, mw, "Training buttons in the SpellWand UI", [
@@ -249,16 +246,15 @@ def code_flowchart():
 
     # --- messages: wand -> Mac (one shared line into "Decode") ---
     bus_a, bus_b = 600, 660
-    for yy, label in [(sample_y, "MOTION_SAMPLE ×N (≈100/s)"), (command_out_y, "ACTION_COMPLETE"),
-                      (button_y, "CAST_START / CAST_END"), (tick_y, "CAST_END (time limit)")]:
+    for yy, label in [(sample_y, "MOTION_SAMPLE ×N (≈100/s)"), (button_y, "CAST_START / CAST_END"),
+                      (tick_y, "CAST_END (time limit)")]:
         svg.line([(390, yy), (bus_a, yy)], colour=TO_MAC, width=2.2)
         svg.text(398, yy - 7, label, size=11.5, fill=TO_MAC, weight=600, halo=True)
     svg.line([(bus_a, tick_y), (bus_a, decode_y), (848, decode_y)], colour=TO_MAC, width=2.2, arrow="tomac")
     svg.text(612, decode_y - 8, "to the Mac (BLE notify)", size=11.5, fill=TO_MAC, italic=True, halo=True)
 
     # --- messages: Mac -> wand (one shared line into "Handle commands") ---
-    for yy, label in [(result_y, "GESTURE_RESULT"), (action_y, "EXECUTE_ACTION"),
-                      (train_y, "START_ / STOP_RECORDING")]:
+    for yy, label in [(result_y, "GESTURE_RESULT"), (train_y, "START_ / STOP_RECORDING")]:
         svg.line([(850, yy), (bus_b, yy)], colour=TO_WAND, width=2.2)
         svg.text(842, yy - 7, label, size=11.5, anchor="end", fill=TO_WAND, weight=600, halo=True)
     hop = 7  # little bridge where this line crosses the wand -> Mac line
@@ -429,17 +425,17 @@ def flag(svg, x, y, label, pointing):
 def circuit():
     svg = Svg(1180, 800)
     svg.text(30, 42, "SpellWand: circuit (mpu9250 branch)", size=22, weight=700)
-    svg.text(30, 64, "ESP32 dev board, MPU-9250/6500 IMU, RGB status LED, cast button, optional action LED, "
+    svg.text(30, 64, "ESP32 dev board, MPU-9250/6500 IMU, RGB status LED, cast button, "
              "4× AAA with a slide switch.", size=13, fill=MUTED)
 
     # ESP32 board with its pins
-    ex, ey, ew, eh = 440, 104, 240, 580
+    ex, ey, ew, eh = 440, 104, 240, 480
     svg.rect(ex, ey, ew, eh, "#f4f6fb", INK, rx=10, width=2)
     svg.text(ex + ew / 2, ey + 32, "ESP32-WROOM-32", size=15, anchor="middle", weight=700)
     svg.text(ex + ew / 2, ey + 50, "dev board (1117 regulator)", size=11.5, anchor="middle", fill=MUTED)
     left_pins = {"5V / VIN": 210, "GND": 300, "3V3": 390}
     right_pins = {"GPIO21 (SDA)": 168, "GPIO22 (SCL)": 208, "GPIO18": 350, "GPIO19": 390, "GPIO23": 430,
-                  "GPIO27": 530, "GPIO26": 630}
+                  "GPIO27": 530}
     for name, yy in left_pins.items():
         svg.line([(ex - 20, yy), (ex, yy)], width=2)
         svg.circle(ex - 20, yy, 3.5, INK)
@@ -524,18 +520,6 @@ def circuit():
     ground(svg, 930, by + 12)
     svg.text(852, by - 34, "SW2: CAST_BUTTON", size=11.5, anchor="middle", weight=600)
     svg.text(708, by + 22, "uses the ESP32's internal pull-up", size=10.5, fill=MUTED)
-
-    # Optional action LED
-    ay = 630
-    svg.rect(708, ay - 34, 260, 88, "none", "#8a8fa0", rx=8, dash="5 4", width=1.3)
-    svg.text(838, ay - 40, "Optional: action LED (EXECUTE_ACTION demo)", size=11.5, anchor="middle", weight=600)
-    svg.line([(702, ay), (716, ay)], colour=SIGNAL, width=2)
-    resistor(svg, 716, ay, 64, "R4", "330 Ω")
-    svg.line([(780, ay), (836, ay)], colour=SIGNAL, width=2)
-    led(svg, 836, ay, "#f2b705")
-    svg.line([(870, ay), (930, ay), (930, ay + 14)], width=2)
-    ground(svg, 930, ay + 14)
-    svg.text(818, ay + 28, "long leg → R4", size=10.5, anchor="middle", fill=MUTED)
 
     # Notes
     svg.rect(30, 530, 380, 240, "#fafafc", "#d0d3dc", rx=10)

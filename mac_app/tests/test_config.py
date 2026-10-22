@@ -75,7 +75,6 @@ class ValidationTest(unittest.TestCase):
     def test_actions_must_be_known_and_complete(self):
         bad_actions = [
             {"type": "launch_rocket"},
-            {"type": "wand_led", "mode": "explode"},
             {"type": "notify"},
             {"type": "webhook", "url": "ftp://example.com/x"},
             {"type": "webhook"},
@@ -87,8 +86,6 @@ class ValidationTest(unittest.TestCase):
     def test_valid_actions_are_accepted(self):
         good_actions = [
             {"type": "none"},
-            {"type": "wand_led", "mode": "toggle"},
-            {"type": "wand_led", "mode": "pulse"},
             {"type": "notify", "message": "Lumos!"},
             {"type": "webhook", "url": "http://homeassistant.local:8123/api/webhook/spellwand"},
         ]
@@ -97,6 +94,13 @@ class ValidationTest(unittest.TestCase):
                 config = copy.deepcopy(DEFAULT_CONFIG)
                 config["gestures"]["CIRCLE"]["action"] = action
                 self.assertEqual(validate_config(config)["gestures"]["CIRCLE"]["action"], action)
+
+    def test_old_wand_led_settings_become_a_notification(self):
+        # The wand no longer has an action LED; older config files must still load.
+        config = copy.deepcopy(DEFAULT_CONFIG)
+        config["gestures"]["CIRCLE"]["action"] = {"type": "wand_led", "mode": "toggle"}
+        self.assertEqual(validate_config(config)["gestures"]["CIRCLE"]["action"],
+                         {"type": "notify", "message": "CIRCLE cast!"})
 
     def test_needs_at_least_one_gesture(self):
         self.assert_rejected(lambda c: c.update(gestures={}))

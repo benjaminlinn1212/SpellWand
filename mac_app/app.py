@@ -20,7 +20,7 @@ from pathlib import Path
 
 from flask import Flask, Response, jsonify, render_template, request
 
-from config import ACTION_TYPES, CONFIG_PATH, WAND_LED_MODES, load_config, save_config
+from config import ACTION_TYPES, CONFIG_PATH, load_config, save_config
 from controller import SpellWandController
 from recorder import DATA_DIR
 from simulator import GESTURES, OTHER_MOTIONS
@@ -77,8 +77,7 @@ def create_app(controller):
 
     @app.get("/api/meta")
     def meta():
-        return jsonify(action_types=ACTION_TYPES, wand_led_modes=list(WAND_LED_MODES),
-                       simulated_motions=list(GESTURES) + list(OTHER_MOTIONS))
+        return jsonify(action_types=ACTION_TYPES, simulated_motions=list(GESTURES) + list(OTHER_MOTIONS))
 
     @app.post("/api/connect")
     @api

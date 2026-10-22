@@ -33,7 +33,6 @@ real data in `mac_app/data/` and `mac_app/config.json` are never touched. Delete
 | IMU mounting | x axis (printed on the board) along the wand toward the tip; y left and z up when the wand is held level (the Mac app assumes this) |
 | `CAST_BUTTON` | GPIO 27 → button → GND (internal pull-up) |
 | `STATUS_LED` (4-leg RGB LED) | GPIO 18 → 220 Ω → red leg; GPIO 19 → 68–100 Ω → green leg; GPIO 23 → 68–100 Ω → blue leg; long (common) leg → GND |
-| Action LED (demo output) | GPIO 26 → 330 Ω resistor → LED long leg; short leg → GND |
 | Power: 4× AAA holder with switch | + → ESP32 **5V/VIN** pin; − → ESP32 GND (see Power below) |
 
 **RGB LED legs:** the longest leg is the common one. On most 5 mm RGB LEDs the order is red, common, green,
@@ -96,8 +95,8 @@ another app without that declaration, makes Python crash immediately with exit c
 ## Tests (no hardware needed)
 
 ```bash
-cd mac_app && .venv/bin/python -m unittest discover -s tests -v      # Mac app: 115 tests
-cd firmware && ~/.platformio/penv/bin/pio test -e native              # wand logic: 33 tests, run on the Mac
+cd mac_app && .venv/bin/python -m unittest discover -s tests -v      # Mac app: 113 tests
+cd firmware && ~/.platformio/penv/bin/pio test -e native              # wand logic: 30 tests, run on the Mac
 ```
 
 Both suites check the same example bytes from `docs/protocol.md`, so the two sides agree on the format.
@@ -122,14 +121,15 @@ Work through these in order; each step only needs the ones before it.
 6. **Casting.** Cast for real and watch the distances in the UI. Raise or lower the rejection threshold
    until gestures are accepted and casual movement comes back `UNKNOWN`. (On simulated data, gestures
    score about 0.1–0.5 and casual movement 2.5 or more; real data will be noisier.)
-7. **Action.** Wire the action LED; `CIRCLE` toggles it by default.
+7. **Action.** Cast `CIRCLE` or `ZIGZAG`: the Mac shows a notification (set per gesture in the UI). If none
+   appears, check System Settings → Notifications (osascript notifications are listed under Script Editor).
 
 ## How it fits together
 
 ```
 ESP32  ──BLE_LINK──>  ble_manager.py ──> controller.py ──> classifier.py      (DTW + rejection)
  (wand_core state machine)              │      │        ──> recorder.py        (CSV samples in data/)
-                                        │      └──────> action_dispatcher.py (wand LED, notification, webhook)
+                                        │      └──────> action_dispatcher.py (notification, webhook)
                                         └── app.py + templates/ + static/  (SpellWand UI, live via server-sent events)
 ```
 
@@ -146,7 +146,7 @@ ESP32  ──BLE_LINK──>  ble_manager.py ──> controller.py ──> class
 
 | Step | Status |
 |---|---|
-| PlatformIO project, IMU reading, `CAST_BUTTON`, states, `STATUS_LED`, `BLE_LINK`, `GESTURE_RESULT` colours, action LED | Written and compiles; logic tested on the Mac (`pio test -e native`); **needs hardware test** |
+| PlatformIO project, IMU reading, `CAST_BUTTON`, states, `STATUS_LED`, `BLE_LINK`, `GESTURE_RESULT` colours | Written and compiles; logic tested on the Mac (`pio test -e native`); **needs hardware test** |
 | `BLE Manager` | Scanning tested on this Mac; connecting tested against the simulated wand only; **needs hardware test** |
 | `Sample Recorder`, `Gesture Classifier`, `Action Dispatcher`, `config.json` | Tested (simulated data) |
 | Flask `SpellWand UI` | Tested through its API and by hand in a browser with the simulated wand |

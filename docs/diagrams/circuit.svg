@@ -3,8 +3,8 @@
 <defs><marker id="arrow-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1f2430"/></marker><marker id="arrow-tomac" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#d9822b"/></marker><marker id="arrow-towand" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7b4fd6"/></marker><marker id="arrow-no" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c62828"/></marker><marker id="arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5b6070"/></marker></defs>
 <rect width="100%" height="100%" fill="#ffffff"/>
 <text x="30" y="42" font-size="22" font-weight="700" text-anchor="start" fill="#1f2430">SpellWand: circuit (mpu9250 branch)</text>
-<text x="30" y="64" font-size="13" font-weight="400" text-anchor="start" fill="#5b6070">ESP32 dev board, MPU-9250/6500 IMU, RGB status LED, cast button, optional action LED, 4× AAA with a slide switch.</text>
-<rect x="440" y="104" width="240" height="580" rx="10" fill="#f4f6fb" stroke="#1f2430" stroke-width="2"/>
+<text x="30" y="64" font-size="13" font-weight="400" text-anchor="start" fill="#5b6070">ESP32 dev board, MPU-9250/6500 IMU, RGB status LED, cast button, 4× AAA with a slide switch.</text>
+<rect x="440" y="104" width="240" height="480" rx="10" fill="#f4f6fb" stroke="#1f2430" stroke-width="2"/>
 <text x="560.0" y="136" font-size="15" font-weight="700" text-anchor="middle" fill="#1f2430">ESP32-WROOM-32</text>
 <text x="560.0" y="154" font-size="11.5" font-weight="400" text-anchor="middle" fill="#5b6070">dev board (1117 regulator)</text>
 <polyline points="420,210 440,210" fill="none" stroke="#1f2430" stroke-width="2" stroke-linejoin="round"/>
@@ -34,9 +34,6 @@
 <polyline points="680,530 700,530" fill="none" stroke="#1f2430" stroke-width="2" stroke-linejoin="round"/>
 <circle cx="700" cy="530" r="3.5" fill="#1f2430"/>
 <text x="668" y="534" font-size="12.5" font-weight="600" text-anchor="end" fill="#1f2430">GPIO27</text>
-<polyline points="680,630 700,630" fill="none" stroke="#1f2430" stroke-width="2" stroke-linejoin="round"/>
-<circle cx="700" cy="630" r="3.5" fill="#1f2430"/>
-<text x="668" y="634" font-size="12.5" font-weight="600" text-anchor="end" fill="#1f2430">GPIO26</text>
 <text x="40" y="196" font-size="12.5" font-weight="700" text-anchor="start" fill="#1f2430">BT1</text>
 <text x="40" y="214" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6070">4× AAA</text>
 <text x="40" y="230" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6070">≈ 6 V</text>
@@ -147,23 +144,6 @@
 <polyline points="926,560 934,560" fill="none" stroke="#1f2430" stroke-width="2" stroke-linejoin="round"/>
 <text x="852" y="496" font-size="11.5" font-weight="600" text-anchor="middle" fill="#1f2430">SW2: CAST_BUTTON</text>
 <text x="708" y="552" font-size="10.5" font-weight="400" text-anchor="start" fill="#5b6070">uses the ESP32's internal pull-up</text>
-<rect x="708" y="596" width="260" height="88" rx="8" fill="none" stroke="#8a8fa0" stroke-width="1.3" stroke-dasharray="5 4"/>
-<text x="838" y="590" font-size="11.5" font-weight="600" text-anchor="middle" fill="#1f2430">Optional: action LED (EXECUTE_ACTION demo)</text>
-<polyline points="702,630 716,630" fill="none" stroke="#1e3a8a" stroke-width="2" stroke-linejoin="round"/>
-<polyline points="716,630 726,630 729.6666666666666,623 737.0,637 744.3333333333334,623 751.6666666666666,637 759.0,623 766.3333333333334,637 770,630 780,630" fill="none" stroke="#1f2430" stroke-width="2" stroke-linejoin="round"/>
-<text x="748.0" y="617" font-size="11.5" font-weight="600" text-anchor="middle" fill="#1f2430" paint-order="stroke" stroke="#ffffff" stroke-width="5" stroke-linejoin="round">R4  330 Ω</text>
-<polyline points="780,630 836,630" fill="none" stroke="#1e3a8a" stroke-width="2" stroke-linejoin="round"/>
-<path d="M836,620 L860,630 L836,640 Z" fill="#f2b705" stroke="#1f2430" stroke-width="1.6" stroke-linejoin="round"/>
-<polyline points="860,619 860,641" fill="none" stroke="#1f2430" stroke-width="2.2" stroke-linejoin="round"/>
-<polyline points="860,630 870,630" fill="none" stroke="#1f2430" stroke-width="2" stroke-linejoin="round"/>
-<polyline points="842,617 850,609" fill="none" stroke="#1f2430" stroke-width="1.3" stroke-linejoin="round" marker-end="url(#arrow-ink)"/>
-<polyline points="850,617 858,609" fill="none" stroke="#1f2430" stroke-width="1.3" stroke-linejoin="round" marker-end="url(#arrow-ink)"/>
-<polyline points="870,630 930,630 930,644" fill="none" stroke="#1f2430" stroke-width="2" stroke-linejoin="round"/>
-<polyline points="930,644 930,654" fill="none" stroke="#1f2430" stroke-width="2" stroke-linejoin="round"/>
-<polyline points="918,654 942,654" fill="none" stroke="#1f2430" stroke-width="2" stroke-linejoin="round"/>
-<polyline points="922,658 938,658" fill="none" stroke="#1f2430" stroke-width="2" stroke-linejoin="round"/>
-<polyline points="926,662 934,662" fill="none" stroke="#1f2430" stroke-width="2" stroke-linejoin="round"/>
-<text x="818" y="658" font-size="10.5" font-weight="400" text-anchor="middle" fill="#5b6070">long leg → R4</text>
 <rect x="30" y="530" width="380" height="240" rx="10" fill="#fafafc" stroke="#d0d3dc" stroke-width="1.5"/>
 <text x="46" y="556" font-size="13.5" font-weight="700" text-anchor="start" fill="#1f2430">Notes</text>
 <text x="46" y="582" font-size="12" font-weight="400" text-anchor="start" fill="#1f2430">Batteries (≈ 6 V) go into 5V / VIN, never 3V3;</text>
