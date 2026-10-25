@@ -141,6 +141,8 @@ ESP32  ──BLE_LINK──>  ble_manager.py ──> controller.py ──> class
   electrical symbols. Regenerate them with `python3 docs/diagrams/make_drawio.py` (this overwrites edits).
 - SVG and PNG pictures of `code_flowchart`, `wand_states`, `classifier_pipeline` and `circuit`, drawn by
   `python3 docs/diagrams/make_diagrams.py`.
+- `circuit_compact.png` and `.pdf`: a compact circuit with large labels for slides (Milestone 1 deck).
+  Edit `circuit_compact.pptx` in PowerPoint and export again; the scripts above do not regenerate it.
 
 ## Progress
 
