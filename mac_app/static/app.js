@@ -246,6 +246,7 @@ function showResult(result) {
     detail = `Distance ${fmt(result.distance)}, within the threshold of ${fmt(result.threshold)}.`;
   }
   if (result.dropped > 0) detail += ` ${result.dropped} samples were lost on the way.`;
+  if (result.response_ms !== null) detail += ` The Mac answered in ${Math.round(result.response_ms)} ms.`;
   $("verdict-detail").textContent = detail;
   $("verdict-action").textContent = "";
   const seconds = result.t.length ? result.t[result.t.length - 1].toFixed(2) : "0";

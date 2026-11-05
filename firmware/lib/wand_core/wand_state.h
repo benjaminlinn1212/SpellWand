@@ -15,7 +15,7 @@ const char* stateName(WandState state);
 namespace colors {
 const Rgb IDLE = {8, 8, 8};          // dim white
 const Rgb CASTING = {0, 0, 255};     // blue
-const Rgb INFLIGHT = {255, 150, 0};  // amber: waiting for the Mac
+const Rgb INFLIGHT = {255, 70, 0};   // amber, chosen by eye on the real LED: waiting for the Mac
 const Rgb NO_ANSWER = {255, 0, 255}; // magenta flashes: no GESTURE_RESULT arrived
 }  // namespace colors
 

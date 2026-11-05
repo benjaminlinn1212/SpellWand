@@ -4,6 +4,7 @@
 """
 
 import copy
+import csv
 import queue
 import tempfile
 import unittest
@@ -11,6 +12,7 @@ from pathlib import Path
 
 import numpy as np
 
+from component_tests import casts_report
 from config import DEFAULT_CONFIG, save_config
 from controller import SpellWandController
 from recorder import list_samples, save_sample
@@ -93,6 +95,37 @@ class ControllerTest(unittest.TestCase):
         self.assertGreater(n, 50)
         self.assertEqual(len(result["trace"]["x"]), n)
         self.assertEqual(len(result["accel"][0]), n)
+
+    def test_result_says_how_long_the_mac_took_to_answer(self):
+        self.wand.cast("CIRCLE")
+        [result] = self.published("result")
+        self.assertGreater(result["response_ms"], 0)
+
+    def test_every_cast_is_added_to_the_cast_log(self):
+        self.wand.cast("CIRCLE")
+        self.wand.cast("WOBBLE")
+        results = self.published("result")
+        with open(self.config_path.with_name("cast_log.csv"), newline="") as f:
+            rows = list(csv.DictReader(f))
+        self.assertEqual([row["predicted"] for row in rows], ["CIRCLE", "UNKNOWN"])
+        self.assertEqual(float(rows[0]["response_ms"]), results[0]["response_ms"])
+        self.assertEqual(float(rows[0]["distance"]), results[0]["distance"])
+        self.assertEqual(int(rows[0]["samples"]), results[0]["sample_count"])
+
+    def test_training_recordings_are_not_in_the_cast_log(self):
+        self.app.start_recording("ZIGZAG")
+        self.app.stop_recording()
+        self.assertFalse(self.config_path.with_name("cast_log.csv").exists())
+
+    def test_the_cast_log_is_not_mistaken_for_a_training_sample(self):
+        before = len(list_samples(self.data_dir))
+        self.wand.cast("CIRCLE")
+        self.assertEqual(len(list_samples(self.data_dir)), before)
+
+    def test_cast_log_can_be_read_by_the_response_time_report(self):
+        self.wand.cast("CIRCLE")
+        with open(self.config_path.with_name("cast_log.csv"), newline="") as f:
+            self.assertTrue(casts_report(f).passed)
 
     def test_training_recording_saves_a_labelled_sample_and_retrains(self):
         before = len(list_samples(self.data_dir))

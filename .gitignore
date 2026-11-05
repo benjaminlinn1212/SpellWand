@@ -12,5 +12,10 @@ __pycache__/
 # Local Claude Code preview config (machine-specific)
 .claude/launch.json
 
+# Component test logs (README.md, "Component tests")
+firmware/logs/
+mac_app/*.log
+mac_app/cast_log.csv
+
 # Simulation mode keeps its own data and settings here (app.py --simulate)
 mac_app/sim_data/

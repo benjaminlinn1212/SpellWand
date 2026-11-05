@@ -367,12 +367,37 @@ static void test_a_moving_wand_teaches_nothing() {
   TEST_ASSERT_FALSE(bias.ready());
 }
 
-static void test_a_slow_steady_turn_is_not_mistaken_for_an_offset() {
+static void test_a_slow_steady_turn_does_not_replace_a_known_offset() {
   // Turning steadily about the vertical axis at 0.3 rad/s: the gyro reading is constant
-  // and gravity doesn't change, but 17 deg/s is far more than any real offset.
+  // and the accelerometer doesn't change, so only the known offset gives it away.
   GyroBias bias;
-  TEST_ASSERT_FALSE(feedStill(bias, 0.0f, 0.0f, 0.3f, 2 * GyroBias::WINDOW));
+  feedStill(bias, 0.02f, 0.0f, 0.0f, GyroBias::WINDOW);
+  TEST_ASSERT_FALSE(feedStill(bias, 0.02f, 0.0f, 0.3f, 2 * GyroBias::WINDOW));
+  TEST_ASSERT_FLOAT_WITHIN(0.005f, 0.0f, bias.offset(2));
+}
+
+static void test_a_large_offset_can_be_learnt() {
+  // A real MPU-9255 at rest on a table: -29.9, 5.25 and 2.07 deg/s.
+  GyroBias bias;
+  TEST_ASSERT_TRUE(feedStill(bias, -0.522f, 0.092f, 0.036f, GyroBias::WINDOW));
+  float gyro[3] = {-0.522f, 0.092f, 0.036f};
+  bias.correct(gyro);
+  TEST_ASSERT_FLOAT_WITHIN(0.005f, 0.0f, gyro[0]);
+  TEST_ASSERT_FLOAT_WITHIN(0.005f, 0.0f, gyro[1]);
+  TEST_ASSERT_FLOAT_WITHIN(0.005f, 0.0f, gyro[2]);
+}
+
+static void test_a_reading_too_large_to_be_an_offset_is_refused() {
+  GyroBias bias;
+  TEST_ASSERT_FALSE(feedStill(bias, 1.2f, 0.0f, 0.0f, 2 * GyroBias::WINDOW));
   TEST_ASSERT_FALSE(bias.ready());
+}
+
+static void test_a_large_offset_can_still_drift() {
+  GyroBias bias;
+  feedStill(bias, -0.522f, 0.0f, 0.0f, GyroBias::WINDOW);
+  TEST_ASSERT_TRUE(feedStill(bias, -0.48f, 0.0f, 0.0f, GyroBias::WINDOW));
+  TEST_ASSERT_FLOAT_WITHIN(0.005f, -0.48f, bias.offset(0));
 }
 
 static void test_tilting_slowly_is_not_mistaken_for_an_offset() {
@@ -449,7 +474,10 @@ int main() {
   RUN_TEST(test_raw_readings_convert_to_si_units);
   RUN_TEST(test_holding_still_reveals_the_gyro_offset);
   RUN_TEST(test_a_moving_wand_teaches_nothing);
-  RUN_TEST(test_a_slow_steady_turn_is_not_mistaken_for_an_offset);
+  RUN_TEST(test_a_slow_steady_turn_does_not_replace_a_known_offset);
+  RUN_TEST(test_a_large_offset_can_be_learnt);
+  RUN_TEST(test_a_reading_too_large_to_be_an_offset_is_refused);
+  RUN_TEST(test_a_large_offset_can_still_drift);
   RUN_TEST(test_tilting_slowly_is_not_mistaken_for_an_offset);
   RUN_TEST(test_restart_drops_a_half_measured_window);
   RUN_TEST(test_later_still_moments_follow_a_drifting_offset);

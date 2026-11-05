@@ -95,8 +95,8 @@ another app without that declaration, makes Python crash immediately with exit c
 ## Tests (no hardware needed)
 
 ```bash
-cd mac_app && .venv/bin/python -m unittest discover -s tests -v      # Mac app: 113 tests
-cd firmware && ~/.platformio/penv/bin/pio test -e native              # wand logic: 30 tests, run on the Mac
+cd mac_app && .venv/bin/python -m unittest discover -s tests -v      # Mac app: 153 tests
+cd firmware && ~/.platformio/penv/bin/pio test -e native              # wand logic: 33 tests, run on the Mac
 ```
 
 Both suites check the same example bytes from `docs/protocol.md`, so the two sides agree on the format.
@@ -105,12 +105,22 @@ Both suites check the same example bytes from `docs/protocol.md`, so the two sid
 
 Work through these in order; each step only needs the ones before it.
 
+The **serial monitor** in these steps is a program, not a device. It shows the text the ESP32 prints,
+over the same USB cable that flashes it. From `firmware/`:
+
+```bash
+~/.platformio/penv/bin/pio run -t upload       # flash the firmware
+~/.platformio/penv/bin/pio device monitor      # show what it prints; Ctrl+C to quit
+```
+
+Press the **EN** button on the board to restart it and see the boot messages from the start.
+
 1. **Board alone.** Flash and open the serial monitor. Expect `=== SpellWand firmware booted ===`,
    `BLE advertising as SpellWand` and an IMU error (no IMU yet). The `STATUS_LED` should glow dim white.
 2. **IMU.** Wire the MPU and reboot with the wand lying still. Expect
-   `IMU answered at 0x68: WHO_AM_I = 0x71 (MPU-9250)` (0x70 means MPU-6500; both are fine),
+   `IMU answered at 0x68: WHO_AM_I = 0x71 (MPU-9250)` (0x70 means MPU-6500 and 0x73 MPU-9255; all are fine),
    `IMU ready: 100 Hz, +-8 g, +-2000 deg/s, 45 Hz low-pass` and `Gyro offset: ... deg/s`
-   (typically a few deg/s). A `WARNING: not an MPU-9250/6500` line means a clone or another chip: tell me the
+   (often a few deg/s, but one real MPU-9255 read 30 deg/s, and the firmware removes it either way). A `WARNING: not an MPU-9250/6500` line means a clone or another chip: tell me the
    WHO_AM_I value. If readings are flaky, set `I2C_CLOCK_HZ` to `100000` in `firmware/src/main.cpp`.
 3. **Button and LED.** Hold `CAST_BUTTON`: serial shows `CAST_START`, the LED turns blue; release: `CAST_END`,
    amber, then two magenta flashes after 2 s (nobody answered yet).
@@ -123,6 +133,67 @@ Work through these in order; each step only needs the ones before it.
    score about 0.1–0.5 and casual movement 2.5 or more; real data will be noisier.)
 7. **Action.** Cast `CIRCLE` or `ZIGZAG`: the Mac shows a notification (set per gesture in the UI). If none
    appears, check System Settings → Notifications (osascript notifications are listed under Script Editor).
+
+## Component tests
+
+These make the data for the Component Testing Summary, using the targets in the Milestone 1 deck
+(slides 5, 11 and 12). Do bring-up steps 1–4 first. Keep every log: git ignores them, so copy them
+somewhere safe. `component_tests.py` turns a log into results and prints PASS or FAIL; run it from `mac_app/`.
+
+**IMU, still and turns.** Flash the logging build, which is the normal firmware plus every reading printed
+over USB. From `firmware/`:
+
+```bash
+~/.platformio/penv/bin/pio run -e imu_log -t upload
+~/.platformio/penv/bin/pio device monitor -e imu_log
+```
+
+Each time the monitor starts, it saves a new log in `firmware/logs/`.
+
+- *Still:* put the wand on a table, start the monitor, press **EN**, leave it alone for at least 70 s, then
+  press Ctrl+C. The report skips the first 5 s and checks every reading in the next 60 s.
+
+  ```bash
+  .venv/bin/python component_tests.py still ../firmware/logs/<log file>
+  ```
+
+  The datasheet allows more accelerometer error than the ±0.30 m/s² target, so a small miss doesn't mean
+  a bad sensor. Rotation is measured after the gyro offset correction; the raw offset is on the
+  `Gyro offset:` line, to compare with the datasheet.
+- *Turns:* start the monitor again with the wand lying still. Turn it 90° about x (the axes printed on the
+  MPU board), wait 2 s, then do the same about y and then z, wait 2 s, and press Ctrl+C.
+
+  ```bash
+  .venv/bin/python component_tests.py turns ../firmware/logs/<log file>
+  ```
+
+**Bluetooth link.** Flash the normal firmware again (`pio run -t upload`). From `mac_app/`, in a terminal
+that is allowed to use Bluetooth (see above):
+
+```bash
+.venv/bin/python -u ble_manager.py --listen | tee -i link_test.log
+```
+
+Stand as far from the Mac as you expect to use the wand, about 3 m. Make 20 casts: hold the button past
+3 s (the wand stops itself at 3 s) and wait for the two magenta flashes before the next cast. They are
+normal here, because the listener doesn't answer. Press Ctrl+C, then:
+
+```bash
+.venv/bin/python component_tests.py link link_test.log
+```
+
+**Response time.** `app.py` adds a row to `mac_app/cast_log.csv` for every cast (`sim_data/cast_log.csv`
+in simulation mode): time, predicted label, nearest gesture, DTW distance, `response_ms`, samples and
+dropped samples. Delete the file to start a new test.
+
+```bash
+.venv/bin/python component_tests.py casts cast_log.csv
+```
+
+`response_ms` is only the Mac's share: from `CAST_END` arriving to `GESTURE_RESULT` sent. For the full time,
+keep the serial monitor open: it prints lines like `GESTURE_RESULT: CIRCLE, 85 ms after CAST_END`. Add 30 ms
+of button debounce to get button release to LED result. The log can't know which gesture you meant to
+cast, so cast in blocks of one gesture and add an `actual` column in a spreadsheet to work out accuracy.
 
 ## How it fits together
 
@@ -154,3 +225,4 @@ ESP32  ──BLE_LINK──>  ble_manager.py ──> controller.py ──> class
 | Flask `SpellWand UI` | Tested through its API and by hand in a browser with the simulated wand |
 | End-to-end | Tested with the simulated wand; **real end-to-end needs hardware** |
 | Rejection threshold | Default 1.0 works on simulated data; **tune with real recordings** |
+| Component test tools (`imu_log` build, `component_tests.py`, `cast_log.csv`) | Reports tested on generated logs; serial logging tried with a fake board; **needs hardware test** |

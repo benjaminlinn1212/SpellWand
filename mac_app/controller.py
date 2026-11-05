@@ -12,11 +12,15 @@ The SpellWand UI (app.py) calls its methods and listens to the events it publish
 """
 
 import copy
+import csv
 import math
 import queue
 import threading
+import time
 from collections import Counter, deque
 from dataclasses import asdict
+from datetime import datetime
+from pathlib import Path
 
 import numpy as np
 
@@ -32,6 +36,7 @@ from recorder import DATA_DIR, delete_sample, list_samples, load_dataset, load_s
 from simulator import GESTURES, SimulatedWand
 
 MOTION_BATCH = 5  # live motion goes to the UI in batches of this many samples
+CAST_LOG_COLUMNS = ["time", "predicted", "nearest", "distance", "response_ms", "samples", "dropped"]
 
 
 def run_in_thread(task):
@@ -52,6 +57,7 @@ class SpellWandController:
                  simulator_realtime=True, simulator_seed=None, notifier=show_mac_notification):
         self.data_dir = data_dir
         self.config_path = config_path
+        self.cast_log_path = Path(config_path).with_name("cast_log.csv")  # beside the settings, not among the samples
         self.config = load_config(config_path)
         self.classifier = GestureClassifier(self.config["dtw_threshold"])
         self.dispatcher = ActionDispatcher(notifier=notifier)
@@ -236,6 +242,7 @@ class SpellWandController:
                 self._publish("motion", {"rows": [[s.t_ms, s.ax, s.ay, s.az, s.gx, s.gy, s.gz] for s in batch]})
 
         elif isinstance(event, CastEnd):
+            received = time.perf_counter()
             with self._lock:
                 samples, source = self._cast_samples, self._cast_source
                 self._cast_samples, self._cast_source = [], None
@@ -249,9 +256,9 @@ class SpellWandController:
             if source == SOURCE_RECORDING:
                 self._background(lambda: self._finish_recording(samples, label, event))
             else:
-                self._background(lambda: self._finish_cast(samples, event))
+                self._background(lambda: self._finish_cast(samples, event, received))
 
-    def _finish_cast(self, samples, end):
+    def _finish_cast(self, samples, end, received):
         sequence = sequence_from_samples(samples)
         with self._lock:
             result = self.classifier.classify(sequence)
@@ -260,20 +267,24 @@ class SpellWandController:
         colour = gesture["color"] if gesture else config["unknown_color"]
         try:
             self._send(encode_gesture_result(result.label, hex_to_rgb(colour)))
+            response_ms = round((time.perf_counter() - received) * 1000, 1)
         except ConnectionError:
-            pass  # the wand will time out and flash "no answer"
+            response_ms = None  # the wand will time out and flash "no answer"
         with self._lock:
             self._wand_state = "IDLE"
             self._history.appendleft({"label": result.label, "distance": _finite(result.distance)})
 
+        sample_count = len(sequence.t_ms)
+        dropped = max(0, end.sample_count - sample_count)
         self._publish("result", {
             "label": result.label,
             "distance": _finite(result.distance),
             "nearest_label": result.nearest_label,
             "threshold": config["dtw_threshold"],
             "color": colour,
-            "sample_count": len(sequence.t_ms),
-            "dropped": max(0, end.sample_count - len(sequence.t_ms)),
+            "response_ms": response_ms,
+            "sample_count": sample_count,
+            "dropped": dropped,
             **self._motion_payload(sequence),
         })
         self._publish_status()
@@ -281,6 +292,17 @@ class SpellWandController:
         outcome = self.dispatcher.dispatch(result.label, gesture["action"] if gesture else {"type": "none"})
         if outcome:
             self._publish("action", asdict(outcome))
+        self._log_cast(result, response_ms, sample_count, dropped)
+
+    def _log_cast(self, result, response_ms, sample_count, dropped):
+        """One row per cast, for the gesture tests (README.md, "Component tests")."""
+        is_new = not self.cast_log_path.exists()
+        with open(self.cast_log_path, "a", newline="") as f:
+            writer = csv.writer(f)
+            if is_new:
+                writer.writerow(CAST_LOG_COLUMNS)
+            writer.writerow([datetime.now().isoformat(timespec="seconds"), result.label, result.nearest_label,
+                             _finite(result.distance), response_ms, sample_count, dropped])
 
     def _finish_recording(self, samples, label, end):
         if label is None:

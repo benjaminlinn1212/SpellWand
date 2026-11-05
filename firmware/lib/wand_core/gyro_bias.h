@@ -8,7 +8,8 @@
 namespace gyro_bias {
 const float MAX_SPREAD_RAD_S = 0.05f;  // "still": each gyro axis stays within this range (about 3 deg/s)...
 const float MAX_ACCEL_SPREAD = 0.5f;   // ...and each accelerometer axis within this (m/s^2): no tilting
-const float MAX_OFFSET_RAD_S = 0.15f;  // real offsets are smaller (about 9 deg/s); more is a slow, steady turn
+const float MAX_OFFSET_RAD_S = 1.0f;   // the first offset can be large: a real MPU-9255 read 30 deg/s at rest
+const float MAX_DRIFT_RAD_S = 0.15f;   // later ones stay near it (about 9 deg/s); more is a slow, steady turn
 }  // namespace gyro_bias
 
 class GyroBias {
@@ -31,13 +32,15 @@ class GyroBias {
     }
     if (++count_ < WINDOW) return false;
 
+    // Before the first offset, any steady reading could be it. After that it can only drift.
+    const float limit = ready_ ? gyro_bias::MAX_DRIFT_RAD_S : gyro_bias::MAX_OFFSET_RAD_S;
     float mean[3];
     bool still = true;
     for (int k = 0; k < 3; k++) {
       mean[k] = sum_[k] / WINDOW;
       still = still && gyroMax_[k] - gyroMin_[k] <= gyro_bias::MAX_SPREAD_RAD_S
                     && accelMax_[k] - accelMin_[k] <= gyro_bias::MAX_ACCEL_SPREAD
-                    && fabsf(mean[k]) <= gyro_bias::MAX_OFFSET_RAD_S;
+                    && fabsf(mean[k] - offset_[k]) <= limit;
     }
     restart();
     if (!still) return false;

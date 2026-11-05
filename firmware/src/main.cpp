@@ -132,6 +132,8 @@ static void startBle() {
   Serial.println("BLE advertising as SpellWand");
 }
 
+static uint32_t lastCastEndMs = 0;  // to time how long the Mac's answer takes
+
 // The state machine reports CAST_START / CAST_END through this.
 class BleEvents : public WandEvents {
  public:
@@ -141,6 +143,7 @@ class BleEvents : public WandEvents {
     Serial.printf("CAST_START (%s)\n", source == protocol::SOURCE_RECORDING ? "recording" : "button");
   }
   void castEnd(uint16_t sampleCount, uint8_t reason) override {
+    lastCastEndMs = millis();
     uint8_t buffer[protocol::MAX_MESSAGE_BYTES];
     sendEvent(buffer, protocol::encodeCastEnd(buffer, sampleCount, reason));
     Serial.printf("CAST_END: %u samples, reason %u\n", (unsigned)sampleCount, (unsigned)reason);
@@ -273,6 +276,12 @@ static void readImu(uint32_t now) {
   }
   gyroBias.correct(gyro);
 
+#ifdef IMU_SERIAL_LOG
+  // Component test build (env:imu_log): every reading over USB, in the units the Mac receives.
+  Serial.printf("IMU,%lu,%.3f,%.3f,%.3f,%.4f,%.4f,%.4f\n", (unsigned long)now, accel[0], accel[1], accel[2],
+                gyro[0], gyro[1], gyro[2]);
+#endif
+
   if (!wand.streaming()) return;
   protocol::MotionSample sample;
   sample.index = wand.nextSampleIndex();
@@ -299,7 +308,8 @@ static void handleCommand(const protocol::Command& command, uint32_t now) {
       wand.stopRecording(now);
       break;
     case protocol::GESTURE_RESULT:
-      Serial.printf("GESTURE_RESULT: %s\n", command.label);
+      Serial.printf("GESTURE_RESULT: %s, %lu ms after CAST_END\n", command.label,
+                    (unsigned long)(millis() - lastCastEndMs));
       wand.gestureResult(command.label, command.color, now);
       break;
     case protocol::EXECUTE_ACTION: {
