@@ -208,6 +208,33 @@ keep the serial monitor open: it prints lines like `GESTURE_RESULT: CIRCLE, 85 m
 of button debounce to get button release to LED result. The log can't know which gesture you meant to
 cast, so cast in blocks of one gesture and add an `actual` column in a spreadsheet to work out accuracy.
 
+### Extra test tools
+
+`tools/hardware_tests/` has small helpers for finding faults and for guided tests. Run these from the top of the
+repo. The first two replace the wand firmware, so flash it back afterwards with `pio run -d firmware -t upload`.
+
+| Tool | Use it to |
+|---|---|
+| `pin_check` | Find wiring faults: turns on all the LED pins and prints the raw button state |
+| `led_check` | Check the LED: shows each colour for 3 s and prints which colour it should be |
+| `button_test.py` | Run the 20-press button test, one prompt at a time |
+| `guided_turns.py` | Run the turn test with prompts telling you when to turn (needs the `imu_log` build) |
+| `link_drive.py` | Run the Bluetooth test with no button: the Mac starts 20 recordings of 5 s each |
+| `capture.py` | Save what the board prints to a file; add `--restart` to include the boot messages |
+
+Flash and watch `pin_check` or `led_check` like this:
+
+```bash
+~/.platformio/penv/bin/pio run -d tools/hardware_tests/pin_check -t upload
+```
+
+```bash
+~/.platformio/penv/bin/pio device monitor -d tools/hardware_tests/pin_check
+```
+
+The scripts say how to run them at the top of each file. `link_drive.py` runs with `mac_app/.venv/bin/python` in
+a terminal allowed to use Bluetooth; the other scripts run with `~/.platformio/penv/bin/python`.
+
 ## How it fits together
 
 ```
@@ -238,4 +265,5 @@ PNG** to update its picture. Wires and arrows stay attached when you move things
 | End-to-end | Tested with the simulated wand; **real end-to-end needs hardware** |
 | Rejection threshold | Default 1.0 works on simulated data; **tune with real recordings** |
 | BNO08x driver | Compiles against the pinned SparkFun library 1.0.6; **never run on a real BNO08x** |
+| `tools/hardware_tests/` | Button, turn and capture scripts tested on a fake board; `pin_check` and `led_check` compile; `link_drive.py` has run on the real ESP32, but not in this tidied form |
 | Component test tools (`imu_log` build, `component_tests.py`, `cast_log.csv`) | Reports tested on generated logs; serial logging tried with a fake board; **needs hardware test** |
