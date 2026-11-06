@@ -219,15 +219,13 @@ ESP32  ──BLE_LINK──>  ble_manager.py ──> controller.py ──> class
 
 `simulator.py` can stand in for the ESP32 at the left end (`app.py --simulate`, and the tests).
 
-**Diagrams** in `docs/diagrams/`:
-- `code_flowchart.drawio` and `circuit.drawio`: **editable** in draw.io (https://app.diagrams.net or the
-  desktop app). Arrows and wires stay attached when you move things; the circuit uses draw.io's
-  electrical symbols. Regenerate them with `python3 docs/diagrams/make_drawio.py` (this overwrites edits).
-- SVG and PNG pictures of `code_flowchart`, `wand_states`, `classifier_pipeline` and `circuit`, drawn by
-  `python3 docs/diagrams/make_diagrams.py`.
-- `circuit_compact.png` and `.pdf`: a compact circuit with large labels for slides (Milestone 1 deck).
-  Edit `circuit_compact.pptx` in PowerPoint and export again; the scripts above do not regenerate it.
-  **These three still show the MPU wiring on this branch.**
+**Diagrams** in `docs/diagrams/`, each as a `.png` picture and an editable `.drawio` file:
+- `circuit`: the wiring, with large labels so it reads well on a slide.
+- `code_flowchart`: what the firmware and the Mac app do, and the messages between them.
+
+Edit a `.drawio` file at https://app.diagrams.net or in the draw.io desktop app, then use **File > Export as >
+PNG** to update its picture. Wires and arrows stay attached when you move things. `make_drawio.py` rebuilds both
+`.drawio` files from scratch, so running it overwrites edits made in draw.io.
 
 ## Progress
 

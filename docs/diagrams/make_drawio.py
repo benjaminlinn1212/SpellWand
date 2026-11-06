@@ -1,8 +1,9 @@
-"""Writes editable draw.io versions of the code flowchart and the circuit.
+"""Writes the code flowchart and the circuit as editable draw.io files.
 
     python3 docs/diagrams/make_drawio.py
 
-Open the .drawio files at https://app.diagrams.net or in the draw.io desktop app.
+This overwrites any edits made in draw.io. Open the .drawio files at https://app.diagrams.net
+or in the draw.io desktop app, and use File > Export as > PNG to update the pictures.
 Arrows and wires are real connectors: they stay attached when you move boxes and parts.
 The circuit uses draw.io's built-in electrical symbols (More shapes -> Electrical).
 """
@@ -20,10 +21,13 @@ NEUTRAL = ("#f4f5f8", "#8a8fa0")
 TO_MAC = "#d9822b"
 TO_WAND = "#7b4fd6"
 
-POWER = "#d32f2f"
-RAIL_3V3 = "#ef6c00"
-SIGNAL = "#1e3a8a"
-I2C = "#00838f"
+# Circuit colours: dark, with large labels, to read well on a slide.
+BACKGROUND = "#11112b"
+PANEL = "#1b1b3f"
+BORDER = "#f2c94c"
+LABEL = "#f4f4fb"
+WIRE = "#b9b9d6"
+POWER = "#f2917a"
 
 ELECTRICAL = "pointerEvents=1;shadow=0;dashed=0;html=1;"
 # Connection points of draw.io's electrical symbols, read from draw.io itself.
@@ -40,8 +44,8 @@ def attr(value):
 
 
 class Drawio:
-    def __init__(self, page_name, width, height):
-        self.page_name, self.width, self.height = page_name, width, height
+    def __init__(self, page_name, width, height, background=None):
+        self.page_name, self.width, self.height, self.background = page_name, width, height, background
         self.cells = []
         self.next_id = 2
 
@@ -82,7 +86,8 @@ class Drawio:
     def save(self, name):
         model = (f'<mxGraphModel dx="{self.width}" dy="{self.height}" grid="1" gridSize="10" guides="1" '
                  f'tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" '
-                 f'pageWidth="{self.width}" pageHeight="{self.height}" math="0" shadow="0">'
+                 f'pageWidth="{self.width}" pageHeight="{self.height}" math="0" shadow="0"'
+                 + (f' background="{self.background}"' if self.background else "") + ">"
                  '<root><mxCell id="0"/><mxCell id="1" parent="0"/>' + "".join(self.cells) +
                  "</root></mxGraphModel>")
         xml = (f'<mxfile host="SpellWand make_drawio.py"><diagram id="{name}" name="{attr(self.page_name)}">'
@@ -141,7 +146,7 @@ def code_flowchart():
 
     container = "rounded=1;arcSize=2;dashed=1;fillColor=none;whiteSpace=wrap;html=1;verticalAlign=top;align=left;spacingLeft=14;spacingTop=4;fontStyle=1;fontSize=13.5;"
     d.vertex("loop(): runs continuously", 30, 362, 380, 600, container + f"strokeColor={WAND[1]};fontColor={WAND[1]};")
-    d.vertex("controller.py: for each message from the wand", 830, 362, 380, 712,
+    controller = d.vertex("controller.py: for each message from the wand", 830, 362, 380, 712,
              container + f"strokeColor={MAC[1]};fontColor={MAC[1]};")
 
     pill = "rounded=1;arcSize=50;whiteSpace=wrap;html=1;fontStyle=1;fontSize=13;"
@@ -179,8 +184,6 @@ def code_flowchart():
                        f"strokeWidth=1.5;" + anchor("exit", 0.5, 1) + anchor("entry", 0, 0.5),
            points=[(220, loop_y), (40, loop_y), (40, 402 + read_h / 2)])
     d.text("back to the top", 56, loop_y + 8, 160, 20, size=11.5, colour=MUTED, italic=True)
-    d.text("States IDLE / CASTING / INFLIGHT in detail: wand_states.svg", 30, 980, 420, 20, size=12,
-           colour=MUTED, italic=True)
 
     # --- Mac column ---
     mx, mw = 850, 340
@@ -193,7 +196,7 @@ def code_flowchart():
         "(live updates through server-sent events)"], MAC)
     flow_arrow(d, start, startup)
     decode, decode_h = step(d, mx, 402, mw, "Decode the message (protocol.py)", [], MAC)
-    flow_arrow(d, startup, decode)
+    flow_arrow(d, startup, controller, style_extra=anchor("exit", 0.5, 1) + anchor("entry", 0.5, 0))
     depending, _ = step(d, mx, 460, mw, "Depending on the message", [
         "CAST_START: clear the buffer, UI shows Casting…",
         "MOTION_SAMPLE: add to buffer, live charts",
@@ -204,11 +207,13 @@ def code_flowchart():
     flow_arrow(d, depending, training, style_extra=anchor("exit", 0.2647, 1) + anchor("entry", 0.5, 0))
     recorder = d.vertex("Sample Recorder:<br>≥ 10 samples? save<br>CSV, retrain", 1078, 584, 122, 74,
                         box_style(MAC, size=11.5))
-    flow_arrow(d, training, recorder, "yes", anchor("exit", 1, 0.5) + anchor("entry", 0, 0.5))
+    flow_arrow(d, training, recorder, style_extra=anchor("exit", 1, 0.5) + anchor("entry", 0, 0.4865))
+    d.text("yes", 1040, 598, 34, 18, size=11.5, colour=MUTED, align="center")
     classify, _ = step(d, mx, 676, mw, "Gesture Classifier (classifier.py)", [
         "GestureResult: label or UNKNOWN, distance,",
-        "nearest gesture (see classifier_pipeline.svg)"], MAC)
-    flow_arrow(d, training, classify, "no", anchor("exit", 0.5, 1) + anchor("entry", 0.2647, 0))
+        "nearest gesture"], MAC)
+    flow_arrow(d, training, classify, style_extra=anchor("exit", 0.5, 1) + anchor("entry", 0.2647, 0))
+    d.text("no", 948, 654, 30, 18, size=11.5, colour=MUTED)
     result, result_h = step(d, mx, 764, mw, "Send GESTURE_RESULT", ["label + colour from config.json"], MAC)
     flow_arrow(d, classify, result)
     show, _ = step(d, mx, 834, mw, "Show the result in the UI", ["label, distance, 3D trail, live charts"], MAC)
@@ -219,7 +224,8 @@ def code_flowchart():
     action, _ = step(d, mx, 1002, mw, "Action Dispatcher", [
         "Mac notification, or web request",
         "(e.g. a Home Assistant webhook)"], MAC)
-    flow_arrow(d, has_action, action, "yes")
+    flow_arrow(d, has_action, action)
+    d.text("yes", 1028, 984, 34, 18, size=11.5, colour=MUTED)
     training_ui, training_ui_h = step(d, mx, 1094, mw, "Training buttons in the SpellWand UI",
                                       ["Start recording / Stop and save"], NEUTRAL)
 
@@ -281,117 +287,87 @@ def ground_at(d, x, y):
 
 
 def circuit():
-    d = Drawio("Circuit", 1180, 800)
-    d.text("SpellWand: circuit (BNO085 branch)", 30, 22, 700, 30, size=22, bold=True)
-    d.text("ESP32 dev board, BNO080/085 IMU, RGB status LED, cast button, "
-           "4× AAA with a slide switch.", 30, 52, 1000, 20, size=13, colour=MUTED)
+    d = Drawio("Circuit", 1180, 720, background=BACKGROUND)
+
+    def label(value, x, y, w=220, size=20, colour=LABEL, bold=False, align="left"):
+        d.text(value, x, y - 15, w, 30, size=size, colour=colour, bold=bold, align=align)
+
+    def symbol(kind, x, y, w, h, extra=""):
+        return part(d, kind, "", x, y, w, h, label_on="none", extra=f"strokeColor={WIRE};strokeWidth=2;fillColor=none;" + extra)
+
+    def ground(x, y):
+        return symbol(GROUND, x - 15, y, 30, 20)
+
+    board = ("rounded=1;arcSize=5;whiteSpace=wrap;html=1;verticalAlign=top;spacingTop=14;"
+             f"fillColor={PANEL};strokeColor={BORDER};strokeWidth=2.5;fontColor={LABEL};fontSize=25;fontStyle=1;")
 
     # ESP32 board; wires attach at the pin heights
-    ex, ey, ew, eh = 440, 104, 240, 480
-    esp = d.vertex("<b style='font-size:15px'>ESP32-WROOM-32</b><br><span style='color:#5b6070'>dev board (1117 regulator)</span>",
-                   ex, ey, ew, eh, "rounded=1;arcSize=3;whiteSpace=wrap;html=1;verticalAlign=top;spacingTop=10;"
-                                   "fillColor=#f4f6fb;strokeColor=#1f2430;strokeWidth=2;fontSize=12;")
+    ex, ey, ew, eh = 300, 30, 330, 660
+    esp = d.vertex("ESP32-WROOM-32", ex, ey, ew, eh, board)
 
     def pin(y, side):
         return (0 if side == "left" else 1, round((y - ey) / eh, 4))
 
-    left = {"5V / VIN": 210, "GND": 300, "3V3": 390}
-    right = {"GPIO21 (SDA)": 168, "GPIO22 (SCL)": 208, "GPIO4 (INT)": 248, "GPIO26 (RST)": 288,
-             "GPIO18": 350, "GPIO19": 390, "GPIO23": 430, "GPIO27": 530}
-    for name, y in left.items():
-        d.text(name, ex + 10, y - 10, 110, 20, size=12.5, bold=True)
-    for name, y in right.items():
-        d.text(name, ex + ew - 130, y - 10, 120, 20, size=12.5, bold=True, align="right")
+    for name, y in {"5V / VIN": 250, "GND": 560}.items():
+        label(name, ex + 16, y)
+    for name, y in {"GPIO21 (SDA)": 115, "GPIO22 (SCL)": 160, "GPIO4 (INT)": 205, "GPIO26 (RST)": 250, "3V3": 295,
+                    "GPIO18": 470, "GPIO19": 525, "GPIO23": 580, "GPIO27": 645}.items():
+        label(name, ex + ew - 236, y, align="right")
 
-    # Batteries and slide switch
-    battery = part(d, BATTERY, "BT1: 4× AAA (≈ 6 V)", 70, 370, 100, 60)
-    switch = part(d, SWITCH, "SW1 slide switch", 222, 194, 75, 20, label_on="top")
-    wire(d, battery, switch, POWER, exit_at=(1, 0.5), entry_at=(0, 0.8), points=[(190, 400), (190, 210)])
-    wire(d, switch, esp, POWER, exit_at=(1, 0.8), entry_at=pin(210, "left"))
-    battery_ground = ground_at(d, 320, 480)
-    wire(d, battery, battery_ground, INK, exit_at=(0, 0.5), entry_at=(0.5, 0), points=[(50, 400), (50, 460), (320, 460)])
-    wire(d, battery_ground, esp, INK, exit_at=(0.5, 0), entry_at=pin(300, "left"), points=[(320, 300)])
-    d.text("+", 172, 372, 14, 16, size=15, colour=POWER, bold=True)
-    d.text("−", 56, 372, 14, 16, size=15, bold=True)
-
-    flag_style = (f"rounded=1;arcSize=20;whiteSpace=wrap;html=1;fillColor=#fff3e6;strokeColor={RAIL_3V3};"
-                  f"fontColor={RAIL_3V3};fontStyle=1;fontSize=11.5;")
-    flag_left = d.vertex("3V3", 340, 380, 46, 20, flag_style)
-    wire(d, esp, flag_left, RAIL_3V3, exit_at=pin(390, "left"), entry_at=(1, 0.5))
+    # Batteries and on/off switch
+    battery = symbol(BATTERY, 50, 400, 100, 60, f"strokeColor={LABEL};")
+    switch = symbol(SWITCH, 195, 250 - 0.8 * 20, 75, 20)
+    wire(d, battery, switch, POWER, exit_at=(1, 0.5), entry_at=(0, 0.8), points=[(175, 430), (175, 250)])
+    wire(d, switch, esp, POWER, exit_at=(1, 0.8), entry_at=pin(250, "left"))
+    battery_ground = ground(170, 590)
+    wire(d, battery, battery_ground, WIRE, exit_at=(0, 0.5), entry_at=(0.5, 0),
+         points=[(30, 430), (30, 560), (170, 560)])
+    wire(d, esp, battery_ground, WIRE, exit_at=pin(560, "left"), entry_at=(0.5, 0), points=[(170, 560)])
+    label("On/off switch", 130, 205, w=170, colour=WIRE, align="center")
+    label("4 × AAA", 50, 482, w=130, size=22, bold=True)
+    label("≈ 6 V", 50, 512, w=130, colour=WIRE)
+    label("+", 150, 400, w=24, size=24, colour=POWER, bold=True)
+    label("−", 30, 400, w=24, size=24, colour=WIRE, bold=True)
 
     # IMU
-    ix, iy, iw, ih = 860, 124, 220, 190
-    imu = d.vertex("<b style='font-size:14px'>BNO080 / BNO085</b>", ix, iy, iw, ih,
-                   f"rounded=1;arcSize=4;whiteSpace=wrap;html=1;verticalAlign=top;spacingTop=6;"
-                   f"fillColor=#eef7f8;strokeColor={I2C};strokeWidth=2;")
-    imu_pins = {"SDA": 168, "SCL": 208, "INT": 248, "RST": 288}
+    ix, iy, iw, ih = 880, 30, 250, 385
+    imu = d.vertex("BNO080 / BNO085", ix, iy, iw, ih, board)
+    imu_pins = {"SDA": 115, "SCL": 160, "INT": 205, "RST": 250, "VCC": 295, "GND": 330, "PS0": 360, "PS1": 390}
     for name, y in imu_pins.items():
-        d.text(name, ix + 8, y - 10, 50, 20, size=12, bold=True)
-    for name, y in {"3V3": 168, "GND": 208}.items():
-        d.text(name, ix + iw - 58, y - 10, 50, 20, size=12, bold=True, align="right")
-    d.text("PS0, PS1 → GND (I²C)<br>BOOT, ADO: leave open", ix + 50, 230, 160, 36, size=11, colour=MUTED)
-    d.text("mount: x axis → wand tip", ix + 8, iy + ih - 24, iw, 20, size=11, colour=MUTED, align="center")
+        label(name, ix + 16, y, w=90)
 
     def imu_pin(name):
         return (0, round((imu_pins[name] - iy) / ih, 4))
 
-    def imu_right_pin(y):
-        return (1, round((y - iy) / ih, 4))
+    for y, name in [(115, "SDA"), (160, "SCL"), (205, "INT"), (250, "RST")]:
+        wire(d, esp, imu, WIRE, exit_at=pin(y, "right"), entry_at=imu_pin(name))
+    wire(d, esp, imu, POWER, exit_at=pin(295, "right"), entry_at=imu_pin("VCC"))
+    label("I²C bus", 655, 90, w=200, colour=WIRE, align="center")
+    label("3.3 V", 655, 275, w=200, colour=POWER, align="center")
+    imu_ground = ground(850, 420)
+    for name in ("GND", "PS0", "PS1"):
+        wire(d, imu, imu_ground, WIRE, exit_at=imu_pin(name), entry_at=(0.5, 0), points=[(850, imu_pins[name])])
 
-    for y, name, colour in [(168, "SDA", I2C), (208, "SCL", I2C), (248, "INT", SIGNAL), (288, "RST", SIGNAL)]:
-        wire(d, esp, imu, colour, exit_at=pin(y, "right"), entry_at=imu_pin(name))
-        d.text(name, 750, y - 20, 50, 18, size=11.5, colour=colour, bold=True, align="center")
-    flag_imu = d.vertex("3V3", 1104, 158, 46, 20, flag_style)
-    wire(d, imu, flag_imu, RAIL_3V3, exit_at=imu_right_pin(168), entry_at=(0, 0.5))
-    imu_ground = ground_at(d, 1110, 232)
-    wire(d, imu, imu_ground, INK, exit_at=imu_right_pin(208), entry_at=(0.5, 0), points=[(1110, 208)])
+    # RGB LED (common cathode)
+    led_ground = ground(960, 615)
+    for y, value, colour in [(470, "220 Ω", "#ee5a52"), (525, "100 Ω", "#5cc26f"), (580, "100 Ω", "#4f74f7")]:
+        resistor = symbol(RESISTOR, 690, y - 8, 80, 16)
+        led = symbol(LED, 830, y - 0.5385 * 32, 50, 32, f"fillColor={colour};")
+        wire(d, esp, resistor, WIRE, exit_at=pin(y, "right"), entry_at=(0, 0.5))
+        wire(d, resistor, led, WIRE, exit_at=(1, 0.5), entry_at=(0, LED[1]))
+        wire(d, led, led_ground, WIRE, exit_at=(1, LED[1]), entry_at=(0.5, 0), points=[(960, y)])
+        label(value, 680, y - 22, w=100, size=17, colour=WIRE, align="center")
+    label("RGB LED", 985, 500, w=180, size=22, bold=True)
+    label("common cathode", 985, 532, w=180, size=17, colour=WIRE)
 
-    # RGB status LED (common cathode)
-    d.vertex("", 800, 318, 158, 136, "rounded=1;arcSize=6;dashed=1;fillColor=none;strokeColor=#8a8fa0;")
-    d.text("D1: 4-leg RGB LED<br>(common cathode)", 968, 332, 200, 36, size=11.5, bold=True)
-    d.text("Legs, typically:<br>red, common (longest),<br>green, blue", 968, 372, 200, 52, size=11,
-           colour=MUTED)
-    rgb_ground = ground_at(d, 930, 470)
-    for y, name, colour in [(350, "R1 220 Ω", "#e53935"), (390, "R2 100 Ω", "#2e9d4f"), (430, "R3 100 Ω", "#2f55ff")]:
-        resistor = part(d, RESISTOR, name, 716, y - 7, 64, 14, label_on="top")
-        led = part(d, LED, "", 836, y - 0.5385 * 32, 50, 32, label_on="none", extra=f"fillColor={colour};")
-        wire(d, esp, resistor, SIGNAL, exit_at=pin(y, "right"), entry_at=(0, 0.5))
-        wire(d, resistor, led, SIGNAL, exit_at=(1, 0.5), entry_at=(0, LED[1]))
-        wire(d, led, rgb_ground, INK, exit_at=(1, LED[1]), entry_at=(0.5, 0), points=[(930, y)])
-    d.text("common leg (longest)", 944, 456, 140, 16, size=10.5, colour=MUTED)
+    # Cast button
+    button = symbol(BUTTON, 760, 645 - 0.8 * 16, 70, 16)
+    wire(d, esp, button, WIRE, exit_at=pin(645, "right"), entry_at=(0, 0.8))
+    button_ground = ground(880, 660)
+    wire(d, button, button_ground, WIRE, exit_at=(1, 0.8), entry_at=(0.5, 0), points=[(880, 645)])
+    label("Cast button", 985, 650, w=180, size=22, bold=True)
 
-    # CAST_BUTTON
-    button = part(d, BUTTON, "SW2: CAST_BUTTON", 826, 530 - 0.8 * 16, 60, 16, label_on="top")
-    wire(d, esp, button, SIGNAL, exit_at=pin(530, "right"), entry_at=(0, 0.8))
-    button_ground = ground_at(d, 930, 546)
-    wire(d, button, button_ground, INK, exit_at=(1, 0.8), entry_at=(0.5, 0), points=[(930, 530)])
-    d.text("uses the ESP32's internal pull-up", 706, 540, 200, 16, size=10.5, colour=MUTED)
-
-    # Notes
-    notes = "<br>".join([
-        "<b style='font-size:13.5px'>Notes</b>",
-        "Batteries (≈ 6 V) go into 5V / VIN, never 3V3;",
-        "the board's 1117 regulator makes the 3.3 V.",
-        "Switch the batteries off while USB is plugged in.",
-        "Check + and − before switching on.",
-        "All ground symbols are one wire: battery −,",
-        "ESP32 GND and every part's ground.",
-        "Both 3V3 flags are the same wire.",
-        "Common-anode RGB LED: long leg to 3V3, and set",
-        "STATUS_LED_COMMON_ANODE = true in main.cpp.",
-    ])
-    d.vertex(notes, 30, 530, 380, 240, "rounded=1;arcSize=4;whiteSpace=wrap;html=1;align=left;verticalAlign=top;"
-                                       "spacingLeft=14;spacingTop=8;fillColor=#fafafc;strokeColor=#d0d3dc;fontSize=12;")
-
-    # Wire colour key
-    d.text("Wire colours (only in this drawing)", 712, 704, 300, 18, size=11.5, bold=True)
-    for i, (colour, label) in enumerate([(POWER, "battery +"), (RAIL_3V3, "3.3 V"), (INK, "ground"),
-                                          (I2C, "I²C"), (SIGNAL, "GPIO signals")]):
-        x = 712 + (i % 3) * 150
-        y = 740 + (i // 3) * 26
-        d.edge(None, None, f"endArrow=none;html=1;strokeWidth=3;strokeColor={colour};",
-               source_point=(x, y), target_point=(x + 26, y))
-        d.text(label, x + 34, y - 9, 110, 18, size=11.5)
+    d.text("All ground symbols connect to the ESP32's GND.", 30, 640, 250, 44, size=14, colour=WIRE)
     return d.save("circuit")
 
 
