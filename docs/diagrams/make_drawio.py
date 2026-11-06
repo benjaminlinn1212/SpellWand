@@ -329,7 +329,7 @@ def circuit():
         d.text(name, ix + 8, y - 10, 50, 20, size=12, bold=True)
     for name, y in {"3V3": 168, "GND": 208}.items():
         d.text(name, ix + iw - 58, y - 10, 50, 20, size=12, bold=True, align="right")
-    d.text("PS0, PS1: low for I²C<br>address 0x4A or 0x4B", ix + 50, 230, 160, 36, size=11, colour=MUTED)
+    d.text("PS0, PS1 → GND (I²C)<br>BOOT, ADO: leave open", ix + 50, 230, 160, 36, size=11, colour=MUTED)
     d.text("mount: x axis → wand tip", ix + 8, iy + ih - 24, iw, 20, size=11, colour=MUTED, align="center")
 
     def imu_pin(name):

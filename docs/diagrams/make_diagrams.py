@@ -481,7 +481,7 @@ def circuit():
     for name, yy in {"3V3": 168, "GND": 208}.items():
         svg.line([(ix + 220, yy), (ix + 234, yy)], width=2)
         svg.text(ix + 210, yy + 4, name, size=12, anchor="end", weight=600)
-    svg.lines(ix + 54, 242, ["PS0, PS1: low for I²C", "address 0x4A or 0x4B"], size=11, gap=15, fill=MUTED)
+    svg.lines(ix + 54, 242, ["PS0, PS1 → GND (I²C)", "BOOT, ADO: leave open"], size=11, gap=15, fill=MUTED)
     svg.text(ix + 118, iy + 180, "mount: x axis → wand tip", size=11, anchor="middle", fill=MUTED)
     for yy, name, colour in [(168, "SDA", I2C), (208, "SCL", I2C), (248, "INT", SIGNAL), (288, "RST", SIGNAL)]:
         svg.line([(702, yy), (846, yy)], colour=colour, width=2.2)

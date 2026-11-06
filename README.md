@@ -27,10 +27,10 @@ real data in `mac_app/data/` and `mac_app/config.json` are never touched. Delete
 | Part | Connection |
 |---|---|
 | ESP32-WROOM-32 dev board | PlatformIO board `esp32dev` |
-| BNO080 / BNO085 IMU | I²C: SDA → GPIO 21, SCL → GPIO 22, power → ESP32 3V3, GND → GND |
+| BNO080 / BNO085 IMU | I²C: SDA → GPIO 21, SCL → GPIO 22, VCC → ESP32 3V3 (not 5V), GND → GND |
 | IMU INT / RST | INT → GPIO 4, RST → GPIO 26. Wire both: they make the link much more reliable. If one is not wired, set it to `-1` in `firmware/src/main.cpp` |
-| IMU address | Either works: the firmware tries 0x4B, then 0x4A |
-| IMU mode pins | PS0 and PS1 must both be low for I²C. Most boards do this already, but a bare clone board may need both wired to GND |
+| IMU mode pins | PS0 and PS1 → GND, which selects I²C. Clone boards like the GY-BNO080/085 may not do this for you |
+| IMU pins left open | BOOT, and ADO/ADDR if your board has it: the firmware tries address 0x4B, then 0x4A |
 | IMU mounting | x axis (printed on the board) along the wand toward the tip; y left and z up when the wand is held level (the Mac app assumes this) |
 | `CAST_BUTTON` | GPIO 27 → button → GND (internal pull-up) |
 | `STATUS_LED` (4-leg RGB LED) | GPIO 18 → 220 Ω → red leg; GPIO 19 → 68–100 Ω → green leg; GPIO 23 → 68–100 Ω → blue leg; long (common) leg → GND |
@@ -128,7 +128,7 @@ Press the **EN** button on the board to restart it and see the boot messages fro
 2. **IMU.** Wire the BNO08x and reboot with the wand lying still. Expect `BNO08x answered at 0x4B` (or `0x4A`),
    `IMU software: part ..., version ...` and `IMU reports: accelerometer on, gyroscope on`. One
    `IMU reset detected` line at start-up is normal; repeated ones mean the link is unreliable (see **I²C on the
-   ESP32** above). If `begin()` fails, check PS0, PS1, INT and RST.
+   ESP32** above). If `begin()` fails or no readings arrive, check PS0, PS1, INT and RST.
 3. **Button and LED.** Hold `CAST_BUTTON`: serial shows `CAST_START`, the LED turns blue; release: `CAST_END`,
    amber, then two magenta flashes after 2 s (nobody answered yet).
 4. **Bluetooth.** `cd mac_app && .venv/bin/python ble_manager.py --listen`, then cast: you should see
