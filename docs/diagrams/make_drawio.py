@@ -150,14 +150,14 @@ def code_flowchart():
     power = d.vertex("Power on (slide switch)", 105, 156, 230, 36, pill + f"fillColor={WAND[0]};strokeColor={WAND[1]};")
     setup, _ = step(d, wx, 212, ww, "setup()", [
         "Serial, CAST_BUTTON pull-up, RGB LED PWM",
-        "Find the IMU at 0x68 / 0x69, read WHO_AM_I",
-        "Set 100 Hz, ±8 g, ±2000 °/s, 45 Hz low-pass",
-        "Measure gyro offset (wand still, up to 3 s)",
+        "Find the IMU at 0x4B / 0x4A, reset it (RST)",
+        "Take every report with our own handler",
+        "Turn on 100 Hz accelerometer + gyro reports",
         'Start BLE, advertise "SpellWand"'], WAND)
     flow_arrow(d, power, setup)
-    read, read_h = step(d, wx, 402, ww, "Read the IMU (new reading every 10 ms)", [
-        "convert to m/s² and rad/s, subtract gyro offset;",
-        "while IDLE, keep re-measuring the offset"], WAND)
+    read, read_h = step(d, wx, 402, ww, "Read the IMU (when INT goes low)", [
+        "each gyro report + newest accel = one reading;",
+        "m/s² and rad/s; the IMU removes its gyro offset"], WAND)
     flow_arrow(d, setup, read)
     send, send_h = step(d, wx, 488, ww, "If CASTING: send MOTION_SAMPLE", ["index, time, accel, gyro (19 bytes)"], WAND)
     flow_arrow(d, read, send)
@@ -282,8 +282,8 @@ def ground_at(d, x, y):
 
 def circuit():
     d = Drawio("Circuit", 1180, 800)
-    d.text("SpellWand: circuit (mpu9250 branch)", 30, 22, 700, 30, size=22, bold=True)
-    d.text("ESP32 dev board, MPU-9250/6500 IMU, RGB status LED, cast button, "
+    d.text("SpellWand: circuit (BNO085 branch)", 30, 22, 700, 30, size=22, bold=True)
+    d.text("ESP32 dev board, BNO080/085 IMU, RGB status LED, cast button, "
            "4× AAA with a slide switch.", 30, 52, 1000, 20, size=13, colour=MUTED)
 
     # ESP32 board; wires attach at the pin heights
@@ -296,8 +296,8 @@ def circuit():
         return (0 if side == "left" else 1, round((y - ey) / eh, 4))
 
     left = {"5V / VIN": 210, "GND": 300, "3V3": 390}
-    right = {"GPIO21 (SDA)": 168, "GPIO22 (SCL)": 208, "GPIO18": 350, "GPIO19": 390, "GPIO23": 430,
-             "GPIO27": 530}
+    right = {"GPIO21 (SDA)": 168, "GPIO22 (SCL)": 208, "GPIO4 (INT)": 248, "GPIO26 (RST)": 288,
+             "GPIO18": 350, "GPIO19": 390, "GPIO23": 430, "GPIO27": 530}
     for name, y in left.items():
         d.text(name, ex + 10, y - 10, 110, 20, size=12.5, bold=True)
     for name, y in right.items():
@@ -320,27 +320,31 @@ def circuit():
     wire(d, esp, flag_left, RAIL_3V3, exit_at=pin(390, "left"), entry_at=(1, 0.5))
 
     # IMU
-    ix, iy, iw, ih = 860, 124, 220, 176
-    imu = d.vertex("<b style='font-size:14px'>MPU-9250 / 6500</b>", ix, iy, iw, ih,
+    ix, iy, iw, ih = 860, 124, 220, 190
+    imu = d.vertex("<b style='font-size:14px'>BNO080 / BNO085</b>", ix, iy, iw, ih,
                    f"rounded=1;arcSize=4;whiteSpace=wrap;html=1;verticalAlign=top;spacingTop=6;"
                    f"fillColor=#eef7f8;strokeColor={I2C};strokeWidth=2;")
-    imu_pins = {"SDA": 168, "SCL": 208, "VCC": 240, "GND": 266}
+    imu_pins = {"SDA": 168, "SCL": 208, "INT": 248, "RST": 288}
     for name, y in imu_pins.items():
         d.text(name, ix + 8, y - 10, 50, 20, size=12, bold=True)
-    d.text("AD0, NCS, FSYNC,<br>INT: leave open<br>(address 0x68)", ix + 64, 186, 150, 52, size=11, colour=MUTED)
-    d.text("mount: x axis → wand tip", ix, iy + ih - 26, iw, 20, size=11, colour=MUTED, align="center")
+    for name, y in {"3V3": 168, "GND": 208}.items():
+        d.text(name, ix + iw - 58, y - 10, 50, 20, size=12, bold=True, align="right")
+    d.text("PS0, PS1: low for I²C<br>address 0x4A or 0x4B", ix + 50, 230, 160, 36, size=11, colour=MUTED)
+    d.text("mount: x axis → wand tip", ix + 8, iy + ih - 24, iw, 20, size=11, colour=MUTED, align="center")
 
     def imu_pin(name):
         return (0, round((imu_pins[name] - iy) / ih, 4))
 
-    wire(d, esp, imu, I2C, exit_at=pin(168, "right"), entry_at=imu_pin("SDA"))
-    wire(d, esp, imu, I2C, exit_at=pin(208, "right"), entry_at=imu_pin("SCL"))
-    d.text("SDA", 750, 148, 50, 18, size=11.5, colour=I2C, bold=True, align="center")
-    d.text("SCL", 750, 188, 50, 18, size=11.5, colour=I2C, bold=True, align="center")
-    flag_imu = d.vertex("3V3", 780, 230, 46, 20, flag_style)
-    wire(d, flag_imu, imu, RAIL_3V3, exit_at=(1, 0.5), entry_at=imu_pin("VCC"))
-    imu_ground = ground_at(d, 830, 290)
-    wire(d, imu, imu_ground, INK, exit_at=imu_pin("GND"), entry_at=(0.5, 0), points=[(830, 266)])
+    def imu_right_pin(y):
+        return (1, round((y - iy) / ih, 4))
+
+    for y, name, colour in [(168, "SDA", I2C), (208, "SCL", I2C), (248, "INT", SIGNAL), (288, "RST", SIGNAL)]:
+        wire(d, esp, imu, colour, exit_at=pin(y, "right"), entry_at=imu_pin(name))
+        d.text(name, 750, y - 20, 50, 18, size=11.5, colour=colour, bold=True, align="center")
+    flag_imu = d.vertex("3V3", 1104, 158, 46, 20, flag_style)
+    wire(d, imu, flag_imu, RAIL_3V3, exit_at=imu_right_pin(168), entry_at=(0, 0.5))
+    imu_ground = ground_at(d, 1110, 232)
+    wire(d, imu, imu_ground, INK, exit_at=imu_right_pin(208), entry_at=(0.5, 0), points=[(1110, 208)])
 
     # RGB status LED (common cathode)
     d.vertex("", 800, 318, 158, 136, "rounded=1;arcSize=6;dashed=1;fillColor=none;strokeColor=#8a8fa0;")

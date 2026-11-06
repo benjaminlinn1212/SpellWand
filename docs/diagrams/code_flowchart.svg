@@ -19,17 +19,17 @@
 <rect x="50" y="212" width="340" height="124" rx="8" fill="#e8eeff" stroke="#3d5bd9" stroke-width="1.5"/>
 <text x="64" y="236" font-size="13.5" font-weight="700" text-anchor="start" fill="#1f2430">setup()</text>
 <text x="64" y="256" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">Serial, CAST_BUTTON pull-up, RGB LED PWM</text>
-<text x="64" y="274" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">Find the IMU at 0x68 / 0x69, read WHO_AM_I</text>
-<text x="64" y="292" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">Set 100 Hz, ±8 g, ±2000 °/s, 45 Hz low-pass</text>
-<text x="64" y="310" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">Measure gyro offset (wand still, up to 3 s)</text>
+<text x="64" y="274" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">Find the IMU at 0x4B / 0x4A, reset it (RST)</text>
+<text x="64" y="292" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">Take every report with our own handler</text>
+<text x="64" y="310" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">Turn on 100 Hz accelerometer + gyro reports</text>
 <text x="64" y="328" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">Start BLE, advertise "SpellWand"</text>
 <polyline points="220,338 220,360" fill="none" stroke="#1f2430" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#arrow-ink)"/>
 <rect x="30" y="362" width="380" height="600" rx="12" fill="none" stroke="#3d5bd9" stroke-width="1.5" stroke-dasharray="6 5"/>
 <text x="46" y="386" font-size="13.5" font-weight="700" text-anchor="start" fill="#3d5bd9">loop(): runs continuously</text>
 <rect x="50" y="402" width="340" height="70" rx="8" fill="#e8eeff" stroke="#3d5bd9" stroke-width="1.5"/>
-<text x="64" y="426" font-size="13.5" font-weight="700" text-anchor="start" fill="#1f2430">Read the IMU (new reading every 10 ms)</text>
-<text x="64" y="446" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">convert to m/s² and rad/s, subtract gyro offset;</text>
-<text x="64" y="464" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">while IDLE, keep re-measuring the offset</text>
+<text x="64" y="426" font-size="13.5" font-weight="700" text-anchor="start" fill="#1f2430">Read the IMU (when INT goes low)</text>
+<text x="64" y="446" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">each gyro report + newest accel = one reading;</text>
+<text x="64" y="464" font-size="12.5" font-weight="400" text-anchor="start" fill="#1f2430">m/s² and rad/s; the IMU removes its gyro offset</text>
 <polyline points="220,472 220,490" fill="none" stroke="#1f2430" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#arrow-ink)"/>
 <rect x="50" y="488" width="340" height="52" rx="8" fill="#e8eeff" stroke="#3d5bd9" stroke-width="1.5"/>
 <text x="64" y="512" font-size="13.5" font-weight="700" text-anchor="start" fill="#1f2430">If CASTING: send MOTION_SAMPLE</text>

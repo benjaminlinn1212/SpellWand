@@ -27,9 +27,10 @@ real data in `mac_app/data/` and `mac_app/config.json` are never touched. Delete
 | Part | Connection |
 |---|---|
 | ESP32-WROOM-32 dev board | PlatformIO board `esp32dev` |
-| MPU-9250 / MPU-6500 IMU | I²C: SDA → GPIO 21, SCL → GPIO 22, VCC → 3.3 V, GND → GND |
-| IMU address pin | AD0 → GND (address 0x68); AD0 → 3.3 V also works (0x69) |
-| IMU other pins | NCS → 3.3 V if your board has it and doesn't already pull it up (selects I²C mode). INT, FSYNC, EDA, ECL: leave unconnected |
+| BNO080 / BNO085 IMU | I²C: SDA → GPIO 21, SCL → GPIO 22, power → ESP32 3V3, GND → GND |
+| IMU INT / RST | INT → GPIO 4, RST → GPIO 26. Wire both: they make the link much more reliable. If one is not wired, set it to `-1` in `firmware/src/main.cpp` |
+| IMU address | Either works: the firmware tries 0x4B, then 0x4A |
+| IMU mode pins | PS0 and PS1 must both be low for I²C. Most boards do this already, but a bare clone board may need both wired to GND |
 | IMU mounting | x axis (printed on the board) along the wand toward the tip; y left and z up when the wand is held level (the Mac app assumes this) |
 | `CAST_BUTTON` | GPIO 27 → button → GND (internal pull-up) |
 | `STATUS_LED` (4-leg RGB LED) | GPIO 18 → 220 Ω → red leg; GPIO 19 → 68–100 Ω → green leg; GPIO 23 → 68–100 Ω → blue leg; long (common) leg → GND |
@@ -57,11 +58,18 @@ Use the holder's switch as the wand's on/off switch. Rechargeable NiMH AAA work 
 - If the ESP32 keeps restarting on battery and the serial monitor says *Brownout detector was triggered*,
   the batteries are too low.
 
-This branch (`mpu9250`) is for the MPU-9250 / MPU-6500; branch `main` has the BNO086 version. The magnetometer
-of an MPU-9250 is not used, so an MPU-6500 (or a board sold as "MPU-9250/6500") works the same.
+This branch (`BNO085`) is for the BNO080 / BNO085, and the BNO086 should work too, because they share the same
+protocol. Branch `mpu9250` has the MPU-9250 / MPU-6500 version. Branch `main` is older and has neither the RGB LED
+nor the component test tools.
 
-**Gyro offset:** keep the wand still for a moment after switching it on. The firmware measures the gyro's
-offset then, and again whenever the wand rests in `IDLE`, because the offset drifts as the chip warms up.
+**Gyro offset:** the BNO08x removes this itself, so the firmware doesn't. Its datasheet says the correction is
+fastest on a stable surface, so lay the wand on a table for a moment after switching it on.
+
+**I²C on the ESP32:** Adafruit lists the BNO085 as not working well over I²C with the ESP32, because of how it
+stretches the clock. The firmware uses INT and RST to reduce the risk, but this hasn't been tried on real hardware
+yet. If readings stop or `IMU reset detected` keeps repeating, set `I2C_FAST_CLOCK_HZ` to `100000` in
+`firmware/src/main.cpp`. SPI is the fallback if that doesn't help; it needs more wires and new pins, because
+the default SPI pins are used by the LED.
 
 `STATUS_LED` colours: dim white `IDLE`, blue `CASTING`, amber `INFLIGHT` (waiting for the Mac), then the
 spell colour for 1 s, three flashes of the `UNKNOWN` colour (red by default), or two magenta flashes if the
@@ -96,7 +104,7 @@ another app without that declaration, makes Python crash immediately with exit c
 
 ```bash
 cd mac_app && .venv/bin/python -m unittest discover -s tests -v      # Mac app: 153 tests
-cd firmware && ~/.platformio/penv/bin/pio test -e native              # wand logic: 33 tests, run on the Mac
+cd firmware && ~/.platformio/penv/bin/pio test -e native              # wand logic: 26 tests, run on the Mac
 ```
 
 Both suites check the same example bytes from `docs/protocol.md`, so the two sides agree on the format.
@@ -117,11 +125,10 @@ Press the **EN** button on the board to restart it and see the boot messages fro
 
 1. **Board alone.** Flash and open the serial monitor. Expect `=== SpellWand firmware booted ===`,
    `BLE advertising as SpellWand` and an IMU error (no IMU yet). The `STATUS_LED` should glow dim white.
-2. **IMU.** Wire the MPU and reboot with the wand lying still. Expect
-   `IMU answered at 0x68: WHO_AM_I = 0x71 (MPU-9250)` (0x70 means MPU-6500 and 0x73 MPU-9255; all are fine),
-   `IMU ready: 100 Hz, +-8 g, +-2000 deg/s, 45 Hz low-pass` and `Gyro offset: ... deg/s`
-   (often a few deg/s, but one real MPU-9255 read 30 deg/s, and the firmware removes it either way). A `WARNING: not an MPU-9250/6500` line means a clone or another chip: tell me the
-   WHO_AM_I value. If readings are flaky, set `I2C_CLOCK_HZ` to `100000` in `firmware/src/main.cpp`.
+2. **IMU.** Wire the BNO08x and reboot with the wand lying still. Expect `BNO08x answered at 0x4B` (or `0x4A`),
+   `IMU software: part ..., version ...` and `IMU reports: accelerometer on, gyroscope on`. One
+   `IMU reset detected` line at start-up is normal; repeated ones mean the link is unreliable (see **I²C on the
+   ESP32** above). If `begin()` fails, check PS0, PS1, INT and RST.
 3. **Button and LED.** Hold `CAST_BUTTON`: serial shows `CAST_START`, the LED turns blue; release: `CAST_END`,
    amber, then two magenta flashes after 2 s (nobody answered yet).
 4. **Bluetooth.** `cd mac_app && .venv/bin/python ble_manager.py --listen`, then cast: you should see
@@ -157,15 +164,21 @@ Each time the monitor starts, it saves a new log in `firmware/logs/`.
   .venv/bin/python component_tests.py still ../firmware/logs/<log file>
   ```
 
-  The datasheet allows more accelerometer error than the ±0.30 m/s² target, so a small miss doesn't mean
-  a bad sensor. Rotation is measured after the gyro offset correction; the raw offset is on the
-  `Gyro offset:` line, to compare with the datasheet.
+  Also check the `readings/s` line. The datasheet lets the chip run at 0.9 to 2.1 times the 100 Hz requested.
+  Anything of 95 or more meets the target. If the rate is below 95, tell me.
 - *Turns:* start the monitor again with the wand lying still. Turn it 90° about x (the axes printed on the
-  MPU board), wait 2 s, then do the same about y and then z, wait 2 s, and press Ctrl+C.
+  IMU board), wait 2 s, then do the same about y and then z, wait 2 s, and press Ctrl+C.
 
   ```bash
   .venv/bin/python component_tests.py turns ../firmware/logs/<log file>
   ```
+
+**I²C stability.** This chip has a known I²C problem on the ESP32, so also leave the logging build running for
+10 minutes. From `firmware/`, count the resets in that log; more than 1 means the link is not stable:
+
+```bash
+grep -c "IMU reset detected" logs/<log file>
+```
 
 **Bluetooth link.** Flash the normal firmware again (`pio run -t upload`). From `mac_app/`, in a terminal
 that is allowed to use Bluetooth (see above):
@@ -214,6 +227,7 @@ ESP32  ──BLE_LINK──>  ble_manager.py ──> controller.py ──> class
   `python3 docs/diagrams/make_diagrams.py`.
 - `circuit_compact.png` and `.pdf`: a compact circuit with large labels for slides (Milestone 1 deck).
   Edit `circuit_compact.pptx` in PowerPoint and export again; the scripts above do not regenerate it.
+  **These three still show the MPU wiring on this branch.**
 
 ## Progress
 
@@ -225,4 +239,5 @@ ESP32  ──BLE_LINK──>  ble_manager.py ──> controller.py ──> class
 | Flask `SpellWand UI` | Tested through its API and by hand in a browser with the simulated wand |
 | End-to-end | Tested with the simulated wand; **real end-to-end needs hardware** |
 | Rejection threshold | Default 1.0 works on simulated data; **tune with real recordings** |
+| BNO08x driver | Compiles against the pinned SparkFun library 1.0.6; **never run on a real BNO08x** |
 | Component test tools (`imu_log` build, `component_tests.py`, `cast_log.csv`) | Reports tested on generated logs; serial logging tried with a fake board; **needs hardware test** |

@@ -138,9 +138,9 @@ def code_flowchart():
     down(svg, wc, 192, 210)
     step(svg, wx, 212, ww, "setup()", [
         "Serial, CAST_BUTTON pull-up, RGB LED PWM",
-        "Find the IMU at 0x68 / 0x69, read WHO_AM_I",
-        "Set 100 Hz, ±8 g, ±2000 °/s, 45 Hz low-pass",
-        "Measure gyro offset (wand still, up to 3 s)",
+        "Find the IMU at 0x4B / 0x4A, reset it (RST)",
+        "Take every report with our own handler",
+        "Turn on 100 Hz accelerometer + gyro reports",
         'Start BLE, advertise "SpellWand"',
     ], WAND)
     down(svg, wc, 338, 360)
@@ -148,9 +148,9 @@ def code_flowchart():
     svg.rect(30, 362, 380, 600, "none", WAND[1], rx=12, dash="6 5")
     svg.text(46, 386, "loop(): runs continuously", size=13.5, weight=700, fill=WAND[1])
     y = 402
-    h = step(svg, wx, y, ww, "Read the IMU (new reading every 10 ms)", [
-        "convert to m/s² and rad/s, subtract gyro offset;",
-        "while IDLE, keep re-measuring the offset"], WAND)
+    h = step(svg, wx, y, ww, "Read the IMU (when INT goes low)", [
+        "each gyro report + newest accel = one reading;",
+        "m/s² and rad/s; the IMU removes its gyro offset"], WAND)
     read_mid = y + h / 2
     down(svg, wc, y + h, y + h + 18)
     y = 488
@@ -424,8 +424,8 @@ def flag(svg, x, y, label, pointing):
 
 def circuit():
     svg = Svg(1180, 800)
-    svg.text(30, 42, "SpellWand: circuit (mpu9250 branch)", size=22, weight=700)
-    svg.text(30, 64, "ESP32 dev board, MPU-9250/6500 IMU, RGB status LED, cast button, "
+    svg.text(30, 42, "SpellWand: circuit (BNO085 branch)", size=22, weight=700)
+    svg.text(30, 64, "ESP32 dev board, BNO080/085 IMU, RGB status LED, cast button, "
              "4× AAA with a slide switch.", size=13, fill=MUTED)
 
     # ESP32 board with its pins
@@ -434,8 +434,8 @@ def circuit():
     svg.text(ex + ew / 2, ey + 32, "ESP32-WROOM-32", size=15, anchor="middle", weight=700)
     svg.text(ex + ew / 2, ey + 50, "dev board (1117 regulator)", size=11.5, anchor="middle", fill=MUTED)
     left_pins = {"5V / VIN": 210, "GND": 300, "3V3": 390}
-    right_pins = {"GPIO21 (SDA)": 168, "GPIO22 (SCL)": 208, "GPIO18": 350, "GPIO19": 390, "GPIO23": 430,
-                  "GPIO27": 530}
+    right_pins = {"GPIO21 (SDA)": 168, "GPIO22 (SCL)": 208, "GPIO4 (INT)": 248, "GPIO26 (RST)": 288,
+                  "GPIO18": 350, "GPIO19": 390, "GPIO23": 430, "GPIO27": 530}
     for name, yy in left_pins.items():
         svg.line([(ex - 20, yy), (ex, yy)], width=2)
         svg.circle(ex - 20, yy, 3.5, INK)
@@ -473,22 +473,23 @@ def circuit():
 
     # IMU
     ix, iy = 860, 124
-    svg.rect(ix, iy, 220, 176, "#eef7f8", I2C, rx=8, width=2)
-    svg.text(ix + 110, iy + 24, "MPU-9250 / 6500", size=14, anchor="middle", weight=700)
-    for name, yy in {"SDA": 168, "SCL": 208, "VCC": 240, "GND": 266}.items():
+    svg.rect(ix, iy, 220, 190, "#eef7f8", I2C, rx=8, width=2)
+    svg.text(ix + 110, iy + 24, "BNO080 / BNO085", size=14, anchor="middle", weight=700)
+    for name, yy in {"SDA": 168, "SCL": 208, "INT": 248, "RST": 288}.items():
         svg.line([(ix - 14, yy), (ix, yy)], width=2)
         svg.text(ix + 10, yy + 4, name, size=12, weight=600)
-    svg.lines(ix + 66, 196, ["AD0, NCS, FSYNC,", "INT: leave open", "(address 0x68)"], size=11, gap=15,
-              fill=MUTED)
-    svg.text(ix + 110, iy + 164, "mount: x axis → wand tip", size=11, anchor="middle", fill=MUTED)
-    svg.line([(702, 168), (846, 168)], colour=I2C, width=2.2)
-    svg.line([(702, 208), (846, 208)], colour=I2C, width=2.2)
-    svg.text(774, 160, "SDA", size=11.5, anchor="middle", fill=I2C, weight=700)
-    svg.text(774, 200, "SCL", size=11.5, anchor="middle", fill=I2C, weight=700)
-    svg.line([(846, 240), (812, 240)], colour=RAIL_3V3, width=2.2)
-    flag(svg, 812, 240, "3V3", "left")
-    svg.line([(846, 266), (830, 266), (830, 276)], width=2)
-    ground(svg, 830, 276)
+    for name, yy in {"3V3": 168, "GND": 208}.items():
+        svg.line([(ix + 220, yy), (ix + 234, yy)], width=2)
+        svg.text(ix + 210, yy + 4, name, size=12, anchor="end", weight=600)
+    svg.lines(ix + 54, 242, ["PS0, PS1: low for I²C", "address 0x4A or 0x4B"], size=11, gap=15, fill=MUTED)
+    svg.text(ix + 118, iy + 180, "mount: x axis → wand tip", size=11, anchor="middle", fill=MUTED)
+    for yy, name, colour in [(168, "SDA", I2C), (208, "SCL", I2C), (248, "INT", SIGNAL), (288, "RST", SIGNAL)]:
+        svg.line([(702, yy), (846, yy)], colour=colour, width=2.2)
+        svg.text(774, yy - 8, name, size=11.5, anchor="middle", fill=colour, weight=700)
+    svg.line([(1094, 168), (1104, 168)], colour=RAIL_3V3, width=2.2)
+    flag(svg, 1104, 168, "3V3", "right")
+    svg.line([(1094, 208), (1110, 208), (1110, 218)], width=2)
+    ground(svg, 1110, 218)
 
     # RGB status LED (common cathode)
     svg.rect(800, 322, 158, 128, "none", "#8a8fa0", rx=8, dash="5 4", width=1.3)

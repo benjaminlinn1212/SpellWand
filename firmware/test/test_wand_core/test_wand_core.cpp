@@ -7,8 +7,7 @@
 #include <unity.h>
 
 #include "debouncer.h"
-#include "gyro_bias.h"
-#include "imu_units.h"
+#include "imu_pairing.h"
 #include "rgb_led.h"
 #include "protocol.h"
 #include "wand_state.h"
@@ -312,123 +311,44 @@ static void test_connection_loss_ends_a_recording() {
   TEST_ASSERT_EQUAL(protocol::END_CONNECTION_LOST, events.reason);
 }
 
-// ---------- MPU-9250 / MPU-6500 raw data ----------
+// ---------- pairing accelerometer and gyroscope reports ----------
 
-static void test_register_bytes_combine_high_byte_first() {
-  TEST_ASSERT_EQUAL_INT16(4096, imu_units::fromBigEndian(0x10, 0x00));
-  TEST_ASSERT_EQUAL_INT16(-200, imu_units::fromBigEndian(0xFF, 0x38));
-  TEST_ASSERT_EQUAL_INT16(-32768, imu_units::fromBigEndian(0x80, 0x00));
+static void test_gyro_report_before_any_accelerometer_report_gives_no_reading() {
+  ImuPairing pairing;
+  ImuReading reading;
+  TEST_ASSERT_FALSE(pairing.gyro(0.1f, 0.2f, 0.3f, reading));
 }
 
-static void test_raw_readings_convert_to_si_units() {
-  // +-8 g range: 4096 counts per g. +-2000 deg/s range: 16.4 counts per deg/s.
-  TEST_ASSERT_FLOAT_WITHIN(1e-4f, 9.80665f, imu_units::accelToMs2(4096));
-  TEST_ASSERT_FLOAT_WITHIN(1e-4f, -19.6133f, imu_units::accelToMs2(-8192));
-  TEST_ASSERT_FLOAT_WITHIN(1e-5f, 0.174533f, imu_units::gyroToRadS(164));     // 10 deg/s
-  TEST_ASSERT_FLOAT_WITHIN(1e-4f, -1.745329f, imu_units::gyroToRadS(-1640));  // -100 deg/s
+static void test_gyro_report_is_paired_with_the_accelerometer_report() {
+  ImuPairing pairing;
+  ImuReading reading;
+  pairing.accel(1.0f, 2.0f, 9.8f);
+  TEST_ASSERT_TRUE(pairing.gyro(0.1f, 0.2f, 0.3f, reading));
+  TEST_ASSERT_EQUAL_FLOAT(1.0f, reading.accel[0]);
+  TEST_ASSERT_EQUAL_FLOAT(2.0f, reading.accel[1]);
+  TEST_ASSERT_EQUAL_FLOAT(9.8f, reading.accel[2]);
+  TEST_ASSERT_EQUAL_FLOAT(0.1f, reading.gyro[0]);
+  TEST_ASSERT_EQUAL_FLOAT(0.2f, reading.gyro[1]);
+  TEST_ASSERT_EQUAL_FLOAT(0.3f, reading.gyro[2]);
 }
 
-// ---------- learning the gyro offset while the wand is still ----------
-
-static const float LEVEL[3] = {0.0f, 0.0f, 9.81f};
-
-// Feeds `n` readings: a constant gyro value plus a tiny +-0.002 rad/s wobble.
-static bool feedStill(GyroBias& bias, float gx, float gy, float gz, int n) {
-  bool learnt = false;
-  for (int i = 0; i < n; i++) {
-    float wobble = (i % 2 == 0) ? 0.002f : -0.002f;
-    float gyro[3] = {gx + wobble, gy - wobble, gz + wobble};
-    learnt = bias.update(gyro, LEVEL) || learnt;
-  }
-  return learnt;
+static void test_the_newest_accelerometer_report_is_used() {
+  ImuPairing pairing;
+  ImuReading reading;
+  pairing.accel(1.0f, 0.0f, 0.0f);
+  pairing.accel(5.0f, 0.0f, 0.0f);
+  pairing.gyro(0.0f, 0.0f, 0.0f, reading);
+  TEST_ASSERT_EQUAL_FLOAT(5.0f, reading.accel[0]);
 }
 
-static void test_holding_still_reveals_the_gyro_offset() {
-  GyroBias bias;
-  TEST_ASSERT_FALSE(bias.ready());
-  TEST_ASSERT_TRUE(feedStill(bias, 0.03f, -0.02f, 0.05f, GyroBias::WINDOW));
-  TEST_ASSERT_TRUE(bias.ready());
-  float gyro[3] = {1.03f, -0.02f, 0.05f};
-  bias.correct(gyro);
-  TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.0f, gyro[0]);
-  TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, gyro[1]);
-  TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, gyro[2]);
-}
-
-static void test_a_moving_wand_teaches_nothing() {
-  GyroBias bias;
-  for (int i = 0; i < 3 * GyroBias::WINDOW; i++) {
-    // Waving evenly back and forth at 1 rad/s: it averages to exactly zero, so only the
-    // "did the gyro stay steady?" check can tell this is not stillness.
-    float swing = (i % 10 < 5) ? 1.0f : -1.0f;
-    float gyro[3] = {swing, 0.0f, 0.0f};
-    TEST_ASSERT_FALSE(bias.update(gyro, LEVEL));
-  }
-  TEST_ASSERT_FALSE(bias.ready());
-}
-
-static void test_a_slow_steady_turn_does_not_replace_a_known_offset() {
-  // Turning steadily about the vertical axis at 0.3 rad/s: the gyro reading is constant
-  // and the accelerometer doesn't change, so only the known offset gives it away.
-  GyroBias bias;
-  feedStill(bias, 0.02f, 0.0f, 0.0f, GyroBias::WINDOW);
-  TEST_ASSERT_FALSE(feedStill(bias, 0.02f, 0.0f, 0.3f, 2 * GyroBias::WINDOW));
-  TEST_ASSERT_FLOAT_WITHIN(0.005f, 0.0f, bias.offset(2));
-}
-
-static void test_a_large_offset_can_be_learnt() {
-  // A real MPU-9255 at rest on a table: -29.9, 5.25 and 2.07 deg/s.
-  GyroBias bias;
-  TEST_ASSERT_TRUE(feedStill(bias, -0.522f, 0.092f, 0.036f, GyroBias::WINDOW));
-  float gyro[3] = {-0.522f, 0.092f, 0.036f};
-  bias.correct(gyro);
-  TEST_ASSERT_FLOAT_WITHIN(0.005f, 0.0f, gyro[0]);
-  TEST_ASSERT_FLOAT_WITHIN(0.005f, 0.0f, gyro[1]);
-  TEST_ASSERT_FLOAT_WITHIN(0.005f, 0.0f, gyro[2]);
-}
-
-static void test_a_reading_too_large_to_be_an_offset_is_refused() {
-  GyroBias bias;
-  TEST_ASSERT_FALSE(feedStill(bias, 1.2f, 0.0f, 0.0f, 2 * GyroBias::WINDOW));
-  TEST_ASSERT_FALSE(bias.ready());
-}
-
-static void test_a_large_offset_can_still_drift() {
-  GyroBias bias;
-  feedStill(bias, -0.522f, 0.0f, 0.0f, GyroBias::WINDOW);
-  TEST_ASSERT_TRUE(feedStill(bias, -0.48f, 0.0f, 0.0f, GyroBias::WINDOW));
-  TEST_ASSERT_FLOAT_WITHIN(0.005f, -0.48f, bias.offset(0));
-}
-
-static void test_tilting_slowly_is_not_mistaken_for_an_offset() {
-  // A steady small gyro reading, but the accelerometer shows the wand tipping over.
-  GyroBias bias;
-  for (int i = 0; i < GyroBias::WINDOW; i++) {
-    float gyro[3] = {0.05f, 0.0f, 0.0f};
-    float accel[3] = {0.0f, 0.06f * i, 9.81f};
-    TEST_ASSERT_FALSE(bias.update(gyro, accel));
-  }
-  TEST_ASSERT_FALSE(bias.ready());
-}
-
-static void test_restart_drops_a_half_measured_window() {
-  GyroBias bias;
-  feedStill(bias, 0.10f, 0.0f, 0.0f, GyroBias::WINDOW / 2);
-  bias.restart();  // e.g. a cast began
-  TEST_ASSERT_TRUE(feedStill(bias, 0.02f, 0.0f, 0.0f, GyroBias::WINDOW));
-  float gyro[3] = {0.02f, 0.0f, 0.0f};
-  bias.correct(gyro);
-  TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, gyro[0]);
-}
-
-static void test_later_still_moments_follow_a_drifting_offset() {
-  // The offset changes as the chip warms up; each still period re-measures it.
-  GyroBias bias;
-  feedStill(bias, 0.02f, 0.0f, 0.0f, GyroBias::WINDOW);
-  feedStill(bias, 0.04f, 0.0f, 0.0f, GyroBias::WINDOW);
-  float gyro[3] = {0.04f, 0.0f, 0.0f};
-  bias.correct(gyro);
-  TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, gyro[0]);
+static void test_every_gyro_report_gives_a_reading_even_without_a_new_accelerometer_report() {
+  ImuPairing pairing;
+  ImuReading reading;
+  pairing.accel(1.0f, 0.0f, 0.0f);
+  TEST_ASSERT_TRUE(pairing.gyro(0.1f, 0.0f, 0.0f, reading));
+  TEST_ASSERT_TRUE(pairing.gyro(0.2f, 0.0f, 0.0f, reading));
+  TEST_ASSERT_EQUAL_FLOAT(0.2f, reading.gyro[0]);
+  TEST_ASSERT_EQUAL_FLOAT(1.0f, reading.accel[0]);
 }
 
 // ---------- STATUS_LED as a 4-leg RGB LED (PWM on three pins) ----------
@@ -470,18 +390,11 @@ int main() {
   RUN_TEST(test_recording_stops_itself_at_maximum_duration);
   RUN_TEST(test_commands_that_do_not_fit_the_state_are_ignored);
   RUN_TEST(test_connection_loss_ends_a_recording);
-  RUN_TEST(test_register_bytes_combine_high_byte_first);
-  RUN_TEST(test_raw_readings_convert_to_si_units);
-  RUN_TEST(test_holding_still_reveals_the_gyro_offset);
-  RUN_TEST(test_a_moving_wand_teaches_nothing);
-  RUN_TEST(test_a_slow_steady_turn_does_not_replace_a_known_offset);
-  RUN_TEST(test_a_large_offset_can_be_learnt);
-  RUN_TEST(test_a_reading_too_large_to_be_an_offset_is_refused);
-  RUN_TEST(test_a_large_offset_can_still_drift);
-  RUN_TEST(test_tilting_slowly_is_not_mistaken_for_an_offset);
-  RUN_TEST(test_restart_drops_a_half_measured_window);
-  RUN_TEST(test_later_still_moments_follow_a_drifting_offset);
   RUN_TEST(test_common_cathode_led_is_driven_by_brightness_directly);
   RUN_TEST(test_common_anode_led_is_driven_inverted);
+  RUN_TEST(test_gyro_report_before_any_accelerometer_report_gives_no_reading);
+  RUN_TEST(test_gyro_report_is_paired_with_the_accelerometer_report);
+  RUN_TEST(test_the_newest_accelerometer_report_is_used);
+  RUN_TEST(test_every_gyro_report_gives_a_reading_even_without_a_new_accelerometer_report);
   return UNITY_END();
 }
