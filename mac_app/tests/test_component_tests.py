@@ -88,15 +88,34 @@ class StillReportTest(unittest.TestCase):
         report = still_report(still_log(gyro_dps=(0.0, 1.5, 0.0)))
         self.assertFalse(report.passed)
 
-    def test_one_bump_during_the_minute_fails(self):
+    def test_a_brief_wobble_of_the_table_passes(self):
         lines = still_log()
-        lines[3000] = imu_line(32000, gyro_dps=(0.0, 0.0, 40.0))
+        for i in range(3000, 3010):  # 0.1 s rocking back and forth, as the real table did
+            lines[i] = imu_line(2000 + 10 * i, gyro_dps=(1.8 if i % 2 else -1.8, 0.0, 0.0))
+        self.assertTrue(still_report(lines).passed)
+
+    def test_a_brief_jolt_in_the_acceleration_passes(self):
+        lines = still_log()
+        for i in range(3000, 3010):
+            lines[i] = imu_line(2000 + 10 * i, accel=(0.0, 0.0, 10.3 if i % 2 else 9.4))
+        self.assertTrue(still_report(lines).passed)
+
+    def test_being_turned_a_few_degrees_fails(self):
+        lines = still_log()
+        for i in range(3000, 3010):  # 0.1 s at 40 deg/s = 4 degrees that do not come back
+            lines[i] = imu_line(2000 + 10 * i, gyro_dps=(40.0, 0.0, 0.0))
         self.assertFalse(still_report(lines).passed)
 
-    def test_one_acceleration_spike_during_the_minute_fails(self):
+    def test_acceleration_off_target_for_a_whole_second_fails(self):
         lines = still_log()
-        lines[3000] = imu_line(32000, accel=(0.0, 0.0, 12.0))
+        for i in range(3000, 3100):
+            lines[i] = imu_line(2000 + 10 * i, accel=(0.0, 0.0, 10.2))
         self.assertFalse(still_report(lines).passed)
+
+    def test_the_largest_single_reading_is_still_reported(self):
+        lines = still_log()
+        lines[3000] = imu_line(32000, gyro_dps=(1.8, 0.0, 0.0))
+        self.assertIn("largest single reading 1.80", "\n".join(still_report(lines).lines))
 
     def test_the_first_seconds_are_skipped_so_pressing_reset_does_not_count(self):
         lines = still_log()

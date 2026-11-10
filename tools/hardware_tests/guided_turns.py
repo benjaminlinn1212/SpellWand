@@ -11,15 +11,12 @@ from pathlib import Path
 
 from serial_port import open_board
 
-PROMPTS = [
-    (0, "Pick it up gently by the edges and hold it level. First turn in 6 seconds."),
-    (6, ">>> TURN 90 degrees around the X arrow NOW"),
-    (9, "    hold still..."),
-    (13, ">>> TURN 90 degrees around the Y arrow NOW"),
-    (16, "    hold still..."),
-    (20, ">>> TURN 90 degrees around the Z arrow NOW"),
-    (23, "    hold still..."),
-    (27, "Done. You can put it down."),
+PROMPTS = [  # 10 s per turn: reading the prompt while holding a breadboard takes a few seconds
+    (0, "Pick it up gently by the edges and hold it level. First turn in 8 seconds."),
+    (8, ">>> TURN 90 degrees around the X arrow NOW, then hold still"),
+    (18, ">>> TURN 90 degrees around the Y arrow NOW, then hold still"),
+    (28, ">>> TURN 90 degrees around the Z arrow NOW, then hold still"),
+    (38, "Done. You can put it down."),
 ]
 
 

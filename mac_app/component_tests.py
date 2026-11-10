@@ -26,6 +26,7 @@ MAX_RESPONSE_MS = 500
 
 SKIP_S = 5    # the still test ignores this much at the start: pressing reset shakes the wand
 STILL_S = 60
+AVERAGE_S = 1  # the still test checks averages over this long, so a brief wobble of the table cancels out
 
 TURN_AXES = "xyz"    # the turn test goes in this order
 TURNING_DPS = 10     # rotating faster than this counts as turning
@@ -63,31 +64,45 @@ def _three(values):
     return " ".join(f"{value:.2f}" for value in values)
 
 
+def rolling_mean(t_s, values, seconds):
+    """For each reading at least `seconds` after the first, the mean of the readings in the `seconds`
+    up to and including it. `values` has one row per reading."""
+    sums = np.vstack([np.zeros(values.shape[1]), np.cumsum(values, axis=0)])
+    starts = np.searchsorted(t_s, t_s - seconds, side="right")
+    ends = np.arange(1, len(t_s) + 1)
+    means = (sums[ends] - sums[starts]) / (ends - starts)[:, None]
+    return means[t_s - t_s[0] >= seconds]
+
+
 def still_report(lines):
-    """Test 3: the wand lies still. Every reading in the minute after SKIP_S must be on target."""
+    """Test 3: the wand lies still. Every AVERAGE_S average in the minute after SKIP_S must be on target.
+    The average rotation over a second is the angle the wand turned in it, so a wobble that comes
+    straight back cancels out, while being moved does not."""
     readings = read_imu_readings(lines)
     t_s = (readings[:, 0] - readings[0, 0]) / 1000 if len(readings) else np.zeros(1)
     if t_s[-1] < SKIP_S + STILL_S:
         return Report(False, [f"Only {t_s[-1]:.0f} s of readings, and the test needs {SKIP_S + STILL_S} s."])
 
     window = readings[(t_s >= SKIP_S) & (t_s < SKIP_S + STILL_S)]
+    window_t_s = window[:, 0] / 1000
     accel, gyro = window[:, 1:4], window[:, 4:7]
     size = np.linalg.norm(accel, axis=1)
-    largest_rotation = np.abs(gyro).max(axis=0)
+    average_size = rolling_mean(window_t_s, size[:, None], AVERAGE_S)[:, 0]
+    largest_average_rotation = np.abs(rolling_mean(window_t_s, gyro, AVERAGE_S)).max(axis=0)
     seconds = (window[-1, 0] - window[0, 0]) / 1000
     report = [
         f"Still test: {seconds:.1f} s, {len(window)} readings, {(len(window) - 1) / seconds:.1f} readings/s",
         f"Acceleration x y z: mean {_three(accel.mean(axis=0))}, spread (SD) {_three(accel.std(axis=0))} m/s²",
-        f"Acceleration size: mean {size.mean():.2f}, lowest {size.min():.2f}, highest {size.max():.2f} m/s²"
-        f" (target {GRAVITY_MS2} ± {GRAVITY_TOLERANCE_MS2:.2f})",
-        f"Rotation x y z: mean {_three(gyro.mean(axis=0))}, largest {_three(largest_rotation)} °/s"
-        f" (target within ±{STILL_ROTATION_LIMIT_DPS:.2f})",
+        f"Acceleration size: {AVERAGE_S} s averages from {average_size.min():.2f} to {average_size.max():.2f} m/s²"
+        f" (target {GRAVITY_MS2} ± {GRAVITY_TOLERANCE_MS2:.2f}); single readings from {size.min():.2f} to {size.max():.2f}",
+        f"Rotation x y z: mean {_three(gyro.mean(axis=0))}, largest {AVERAGE_S} s average {_three(largest_average_rotation)} °/s"
+        f" (target within ±{STILL_ROTATION_LIMIT_DPS:.2f}); largest single reading {_three(np.abs(gyro).max(axis=0))}",
     ]
     offsets = [match.group(1) for match in map(GYRO_OFFSET_LINE.search, lines) if match]
     if offsets:
         report.append(f"Gyro offset at boot, already removed from the rotation above: {offsets[-1]} °/s")
-    passed = (np.abs(size - GRAVITY_MS2).max() <= GRAVITY_TOLERANCE_MS2
-              and largest_rotation.max() <= STILL_ROTATION_LIMIT_DPS)
+    passed = (np.abs(average_size - GRAVITY_MS2).max() <= GRAVITY_TOLERANCE_MS2
+              and largest_average_rotation.max() <= STILL_ROTATION_LIMIT_DPS)
     return Report(bool(passed), report)
 
 

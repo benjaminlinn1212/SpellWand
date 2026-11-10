@@ -103,7 +103,7 @@ another app without that declaration, makes Python crash immediately with exit c
 ## Tests (no hardware needed)
 
 ```bash
-cd mac_app && .venv/bin/python -m unittest discover -s tests -v      # Mac app: 153 tests
+cd mac_app && .venv/bin/python -m unittest discover -s tests -v      # Mac app: 156 tests
 cd firmware && ~/.platformio/penv/bin/pio test -e native              # wand logic: 33 tests, run on the Mac
 ```
 
@@ -126,9 +126,11 @@ Press the **EN** button on the board to restart it and see the boot messages fro
 1. **Board alone.** Flash and open the serial monitor. Expect `=== SpellWand firmware booted ===`,
    `BLE advertising as SpellWand` and an IMU error (no IMU yet). The `STATUS_LED` should glow dim white.
 2. **IMU.** Wire the BNO08x and reboot with the wand lying still. Expect `BNO08x answered at 0x4B` (or `0x4A`),
-   `IMU software: part ..., version ...` and `IMU reports: accelerometer on, gyroscope on`. One
-   `IMU reset detected` line at start-up is normal; repeated ones mean the link is unreliable (see **I²C on the
-   ESP32** above). If `begin()` fails or no readings arrive, check PS0, PS1, INT and RST.
+   `IMU software: part ..., version ...` and `IMU reports: accelerometer on, gyroscope on`. At start-up the
+   chip resets twice, so expect two `IMU reset detected` lines (and possibly one `accelerometer FAILED` before
+   them) before the readings start; more later mean the link is unreliable (see **I²C on the ESP32** above).
+   If `begin()` fails or no readings arrive, check PS0, PS1, INT and RST, and that the IMU's header is
+   soldered: pins pushed through without solder give random results.
 3. **Button and LED.** Hold `CAST_BUTTON`: serial shows `CAST_START`, the LED turns blue; release: `CAST_END`,
    amber, then two magenta flashes after 2 s (nobody answered yet).
 4. **Bluetooth.** `cd mac_app && .venv/bin/python ble_manager.py --listen`, then cast: you should see
@@ -157,8 +159,11 @@ over USB. From `firmware/`:
 
 Each time the monitor starts, it saves a new log in `firmware/logs/`.
 
-- *Still:* put the wand on a table, start the monitor, press **EN**, leave it alone for at least 70 s, then
-  press Ctrl+C. The report skips the first 5 s and checks every reading in the next 60 s.
+- *Still:* put the wand flat on a table, start the monitor, press **EN**, leave it alone for at least 70 s,
+  then press Ctrl+C. The report skips the first 5 s and checks every 1-second average in the next 60 s.
+  The average rotation over a second is the angle the wand turned in it, so a table wobble that comes
+  straight back cancels out, while really being moved still fails. It also prints the largest single
+  readings, for the summary.
 
   ```bash
   .venv/bin/python component_tests.py still ../firmware/logs/<log file>
@@ -174,7 +179,8 @@ Each time the monitor starts, it saves a new log in `firmware/logs/`.
   ```
 
 **I²C stability.** This chip has a known I²C problem on the ESP32, so also leave the logging build running for
-10 minutes. From `firmware/`, count the resets in that log; more than 1 means the link is not stable:
+10 minutes. From `firmware/`, count the resets in that log; more than the 2 at start-up means the link is
+not stable:
 
 ```bash
 grep -c "IMU reset detected" logs/<log file>
