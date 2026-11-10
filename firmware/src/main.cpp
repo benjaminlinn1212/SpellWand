@@ -18,6 +18,7 @@
 #include "imu_pairing.h"
 #include "protocol.h"
 #include "rgb_led.h"
+#include "send_queue.h"
 #include "wand_state.h"
 
 // ---- Pins (see the wiring table in README.md) ----
@@ -60,16 +61,79 @@ static volatile bool bleConnected = false;
 // Commands arrive on the BLE task; loop() handles them so all wand logic runs in one place.
 static QueueHandle_t commandQueue = nullptr;
 
-static void sendEvent(uint8_t* data, size_t length) {
+static BLE2902* eventsSubscription = nullptr;  // whether the Mac has switched notifications on
+static volatile esp_gatt_if_t bleGattsIf = ESP_GATT_IF_NONE;
+static volatile uint16_t bleConnId = 0;
+
+// The Bluetooth stack refuses a message when its own buffers are full, and a refused message is
+// lost. So every event waits in this queue and loop() sends it once the stack accepts it.
+// 600 slots (about 14 KB) hold a whole 5 s recording even if nothing gets through.
+static SendQueue<600, 8> sendQueue;
+
+// The fastest connection interval Apple allows: 15 ms, in units of 1.25 ms. A shorter interval
+// lets more messages through per second.
+static const uint16_t BLE_INTERVAL_UNITS = 12;
+static const uint16_t BLE_TIMEOUT_UNITS = 400;  // 4 s, in units of 10 ms
+
+static uint32_t lastCastEndMs = 0;  // to time sending the cast and the Mac's answer
+
+// Bluetooth statistics for one cast, printed once everything from it has been sent.
+static size_t castPeakBacklog = 0;
+static uint32_t castDroppedAtStart = 0;
+static bool castEndWaiting = false;
+
+// `important`: CAST_START, CAST_END and ACTION_COMPLETE, which must never be pushed out by readings.
+static void sendEvent(uint8_t* data, size_t length, bool important) {
   if (!bleConnected) return;
-  eventsCharacteristic->setValue(data, length);
-  eventsCharacteristic->notify();
+  sendQueue.push(data, length, important);
+  if (sendQueue.size() > castPeakBacklog) castPeakBacklog = sendQueue.size();
+}
+
+// Sends waiting messages until the stack says it is busy; the rest are tried again next loop().
+static void sendWaitingMessages() {
+  const uint8_t* data;
+  size_t length;
+  while (bleConnected && sendQueue.front(data, length)) {
+    if (eventsSubscription->getNotifications()) {
+      esp_err_t result = esp_ble_gatts_send_indicate(bleGattsIf, bleConnId, eventsCharacteristic->getHandle(),
+                                                     length, const_cast<uint8_t*>(data), false);
+      if (result != ESP_OK) break;  // stack busy: keep the message and try again later
+    }
+    sendQueue.pop();
+  }
+  if (castEndWaiting && sendQueue.size() == 0) {
+    castEndWaiting = false;
+    Serial.printf("Bluetooth: cast fully sent %lu ms after CAST_END, longest queue %u messages, %lu readings dropped\n",
+                  // millis(), not loop()'s `now`: CAST_END may have been stamped later in this loop.
+                  (unsigned long)(millis() - lastCastEndMs), (unsigned)castPeakBacklog,
+                  (unsigned long)(sendQueue.dropped() - castDroppedAtStart));
+  }
+}
+
+// Runs on the Bluetooth task for every GATT server event (after the BLE library's own handling).
+static void onGattsEvent(esp_gatts_cb_event_t event, esp_gatt_if_t gattsIf, esp_ble_gatts_cb_param_t* param) {
+  if (event != ESP_GATTS_CONNECT_EVT) return;
+  bleGattsIf = gattsIf;
+  bleConnId = param->connect.conn_id;
+  bleConnected = true;
+  Serial.printf("Bluetooth interval at connect: %.2f ms\n", param->connect.conn_params.interval * 1.25f);
+  esp_ble_conn_update_params_t request = {};
+  memcpy(request.bda, param->connect.remote_bda, sizeof(esp_bd_addr_t));
+  request.min_int = BLE_INTERVAL_UNITS;
+  request.max_int = BLE_INTERVAL_UNITS;
+  request.latency = 0;
+  request.timeout = BLE_TIMEOUT_UNITS;
+  esp_ble_gap_update_conn_params(&request);
+}
+
+// Runs on the Bluetooth task; reports the interval the Mac agreed to.
+static void onGapEvent(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t* param) {
+  if (event != ESP_GAP_BLE_UPDATE_CONN_PARAMS_EVT) return;
+  Serial.printf("Bluetooth interval now %.2f ms (asked for %.2f ms)\n", param->update_conn_params.conn_int * 1.25f,
+                BLE_INTERVAL_UNITS * 1.25f);
 }
 
 class ServerCallbacks : public BLEServerCallbacks {
-  void onConnect(BLEServer*) override {
-    bleConnected = true;
-  }
   void onDisconnect(BLEServer*) override {
     bleConnected = false;
     BLEDevice::startAdvertising();  // let the Mac reconnect
@@ -88,12 +152,15 @@ class CommandCallbacks : public BLECharacteristicCallbacks {
 static void startBle() {
   commandQueue = xQueueCreate(8, sizeof(protocol::Command));
   BLEDevice::init(DEVICE_NAME);
+  BLEDevice::setCustomGattsHandler(onGattsEvent);
+  BLEDevice::setCustomGapHandler(onGapEvent);
   BLEServer* server = BLEDevice::createServer();
   server->setCallbacks(new ServerCallbacks());
   BLEService* service = server->createService(SERVICE_UUID);
 
   eventsCharacteristic = service->createCharacteristic(EVENTS_UUID, BLECharacteristic::PROPERTY_NOTIFY);
-  eventsCharacteristic->addDescriptor(new BLE2902());  // lets the Mac switch notifications on
+  eventsSubscription = new BLE2902();  // lets the Mac switch notifications on
+  eventsCharacteristic->addDescriptor(eventsSubscription);
 
   BLECharacteristic* commands = service->createCharacteristic(
       COMMANDS_UUID, BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_WRITE_NR);
@@ -106,20 +173,21 @@ static void startBle() {
   Serial.println("BLE advertising as SpellWand");
 }
 
-static uint32_t lastCastEndMs = 0;  // to time how long the Mac's answer takes
-
 // The state machine reports CAST_START / CAST_END through this.
 class BleEvents : public WandEvents {
  public:
   void castStart(uint8_t source) override {
+    castPeakBacklog = sendQueue.size();
+    castDroppedAtStart = sendQueue.dropped();
     uint8_t buffer[protocol::MAX_MESSAGE_BYTES];
-    sendEvent(buffer, protocol::encodeCastStart(buffer, source));
+    sendEvent(buffer, protocol::encodeCastStart(buffer, source), true);
     Serial.printf("CAST_START (%s)\n", source == protocol::SOURCE_RECORDING ? "recording" : "button");
   }
   void castEnd(uint16_t sampleCount, uint8_t reason) override {
     lastCastEndMs = millis();
     uint8_t buffer[protocol::MAX_MESSAGE_BYTES];
-    sendEvent(buffer, protocol::encodeCastEnd(buffer, sampleCount, reason));
+    sendEvent(buffer, protocol::encodeCastEnd(buffer, sampleCount, reason), true);
+    castEndWaiting = bleConnected;
     Serial.printf("CAST_END: %u samples, reason %u\n", (unsigned)sampleCount, (unsigned)reason);
   }
 };
@@ -160,7 +228,7 @@ static void handleReading(const ImuReading& reading, uint32_t now) {
   sample.gy = reading.gyro[1];
   sample.gz = reading.gyro[2];
   uint8_t buffer[protocol::MAX_MESSAGE_BYTES];
-  sendEvent(buffer, protocol::encodeMotionSample(buffer, sample));
+  sendEvent(buffer, protocol::encodeMotionSample(buffer, sample), false);
 }
 
 // One packet from the BNO08x can hold several reports, and the library's own handler keeps
@@ -231,7 +299,7 @@ static void handleCommand(const protocol::Command& command, uint32_t now) {
     case protocol::EXECUTE_ACTION: {
       // Reserved in the protocol, but this wand has no action outputs: answer "not done".
       uint8_t buffer[protocol::MAX_MESSAGE_BYTES];
-      sendEvent(buffer, protocol::encodeActionComplete(buffer, command.action, false));
+      sendEvent(buffer, protocol::encodeActionComplete(buffer, command.action, false), true);
       Serial.printf("EXECUTE_ACTION %u: no action outputs on this wand\n", (unsigned)command.action);
       break;
     }
@@ -294,10 +362,15 @@ void loop() {
     readImu();
   }
 
-  // A lost connection ends any recording in progress.
+  // A lost connection ends any recording in progress. Messages still waiting are for the old
+  // connection, so they go too.
   static bool wasConnected = false;
   if (wasConnected && !bleConnected) wand.connectionLost(now);
-  if (bleConnected != wasConnected) Serial.println(bleConnected ? "Mac connected" : "Mac disconnected");
+  if (bleConnected != wasConnected) {
+    Serial.println(bleConnected ? "Mac connected" : "Mac disconnected");
+    sendQueue.clear();
+    castEndWaiting = false;
+  }
   wasConnected = bleConnected;
 
   protocol::Command command;
@@ -314,5 +387,6 @@ void loop() {
     Serial.printf("State: %s\n", stateName(lastState));
   }
 
+  sendWaitingMessages();
   updateStatusLed(now);
 }

@@ -10,6 +10,7 @@
 #include "imu_pairing.h"
 #include "rgb_led.h"
 #include "protocol.h"
+#include "send_queue.h"
 #include "wand_state.h"
 
 void setUp() {}
@@ -368,8 +369,103 @@ static void test_common_anode_led_is_driven_inverted() {
   TEST_ASSERT_EQUAL_UINT8(255, rgb_led::duty(0, 255, true));    // off
 }
 
+// ---------- send queue (messages waiting for Bluetooth) ----------
+
+// A small queue for the tests: room for 4 messages, 1 of them kept for important ones.
+typedef SendQueue<4, 1> SmallQueue;
+
+static void pushByte(SmallQueue& queue, uint8_t value, bool important = false) {
+  uint8_t message[2] = {value, value};
+  queue.push(message, sizeof(message), important);
+}
+
+static uint8_t frontByte(const SmallQueue& queue) {
+  const uint8_t* data = nullptr;
+  size_t length = 0;
+  TEST_ASSERT_TRUE(queue.front(data, length));
+  TEST_ASSERT_EQUAL(2, length);
+  return data[0];
+}
+
+static void test_queued_messages_come_out_in_the_order_they_went_in() {
+  SmallQueue queue;
+  pushByte(queue, 1);
+  pushByte(queue, 2);
+  TEST_ASSERT_EQUAL_UINT8(1, frontByte(queue));
+  queue.pop();
+  TEST_ASSERT_EQUAL_UINT8(2, frontByte(queue));
+  queue.pop();
+  const uint8_t* data;
+  size_t length;
+  TEST_ASSERT_FALSE(queue.front(data, length));
+}
+
+static void test_a_message_the_radio_refused_stays_at_the_front_to_try_again() {
+  SmallQueue queue;
+  pushByte(queue, 1);
+  pushByte(queue, 2);
+  frontByte(queue);  // the send failed, so nothing is popped
+  TEST_ASSERT_EQUAL_UINT8(1, frontByte(queue));
+  TEST_ASSERT_EQUAL(2, queue.size());
+}
+
+static void test_readings_are_dropped_and_counted_once_only_the_reserved_room_is_left() {
+  SmallQueue queue;
+  for (uint8_t i = 1; i <= 4; i++) pushByte(queue, i);
+  TEST_ASSERT_EQUAL(3, queue.size());
+  TEST_ASSERT_EQUAL_UINT32(1, queue.dropped());
+}
+
+static void test_important_messages_still_fit_when_readings_have_filled_their_share() {
+  SmallQueue queue;
+  for (uint8_t i = 1; i <= 3; i++) pushByte(queue, i);
+  uint8_t castEnd[2] = {9, 9};
+  TEST_ASSERT_TRUE(queue.push(castEnd, sizeof(castEnd), true));
+  TEST_ASSERT_EQUAL(4, queue.size());
+  TEST_ASSERT_FALSE(queue.push(castEnd, sizeof(castEnd), true));  // now completely full
+  TEST_ASSERT_EQUAL_UINT32(1, queue.dropped());
+}
+
+static void test_the_queue_keeps_working_after_wrapping_around() {
+  SmallQueue queue;
+  for (uint8_t i = 1; i <= 10; i++) {
+    pushByte(queue, i);
+    pushByte(queue, i + 100);
+    TEST_ASSERT_EQUAL_UINT8(i, frontByte(queue));
+    queue.pop();
+    TEST_ASSERT_EQUAL_UINT8(i + 100, frontByte(queue));
+    queue.pop();
+  }
+  TEST_ASSERT_EQUAL(0, queue.size());
+  TEST_ASSERT_EQUAL_UINT32(0, queue.dropped());
+}
+
+static void test_clearing_the_queue_forgets_waiting_messages() {
+  SmallQueue queue;
+  pushByte(queue, 1);
+  pushByte(queue, 2);
+  queue.clear();
+  TEST_ASSERT_EQUAL(0, queue.size());
+  pushByte(queue, 3);
+  TEST_ASSERT_EQUAL_UINT8(3, frontByte(queue));
+}
+
+static void test_a_message_longer_than_a_slot_is_refused() {
+  SmallQueue queue;
+  uint8_t tooLong[protocol::MAX_MESSAGE_BYTES + 1] = {0};
+  TEST_ASSERT_FALSE(queue.push(tooLong, sizeof(tooLong), true));
+  TEST_ASSERT_EQUAL(0, queue.size());
+}
+
 int main() {
   UNITY_BEGIN();
+  RUN_TEST(test_queued_messages_come_out_in_the_order_they_went_in);
+  RUN_TEST(test_a_message_the_radio_refused_stays_at_the_front_to_try_again);
+  RUN_TEST(test_readings_are_dropped_and_counted_once_only_the_reserved_room_is_left);
+  RUN_TEST(test_important_messages_still_fit_when_readings_have_filled_their_share);
+  RUN_TEST(test_the_queue_keeps_working_after_wrapping_around);
+  RUN_TEST(test_clearing_the_queue_forgets_waiting_messages);
+  RUN_TEST(test_a_message_longer_than_a_slot_is_refused);
   RUN_TEST(test_events_encode_to_the_documented_bytes);
   RUN_TEST(test_documented_command_bytes_decode);
   RUN_TEST(test_out_of_range_readings_are_clamped);

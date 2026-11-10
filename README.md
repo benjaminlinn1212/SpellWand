@@ -104,7 +104,7 @@ another app without that declaration, makes Python crash immediately with exit c
 
 ```bash
 cd mac_app && .venv/bin/python -m unittest discover -s tests -v      # Mac app: 153 tests
-cd firmware && ~/.platformio/penv/bin/pio test -e native              # wand logic: 26 tests, run on the Mac
+cd firmware && ~/.platformio/penv/bin/pio test -e native              # wand logic: 33 tests, run on the Mac
 ```
 
 Both suites check the same example bytes from `docs/protocol.md`, so the two sides agree on the format.
@@ -194,6 +194,13 @@ normal here, because the listener doesn't answer. Press Ctrl+C, then:
 ```bash
 .venv/bin/python component_tests.py link link_test.log
 ```
+
+If the serial monitor is open too, it shows the wand's side. On connecting, `Bluetooth interval now 15.00 ms`:
+the wand asks the Mac for a message slot every 15 ms instead of macOS's usual 30 ms, which doubles how many
+readings get through. After each cast, `Bluetooth: cast fully sent ... longest queue N messages, D readings
+dropped`: when the radio is busy, messages wait in a queue and are resent instead of being lost, so N above
+1 means the link was struggling, and D should always be 0. Without the button, `tools/hardware_tests/link_drive.py`
+has the Mac start 20 recordings itself.
 
 **Response time.** `app.py` adds a row to `mac_app/cast_log.csv` for every cast (`sim_data/cast_log.csv`
 in simulation mode): time, predicted label, nearest gesture, DTW distance, `response_ms`, samples and
