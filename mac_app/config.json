@@ -1,5 +1,5 @@
 {
-  "dtw_threshold": 1.0,
+  "dtw_threshold": 1.5,
   "unknown_color": "#ff0000",
   "gestures": {
     "CIRCLE": {
@@ -9,17 +9,17 @@
         "message": "Circle cast!"
       }
     },
+    "HORIZONTAL_LINE": {
+      "color": "#00c828",
+      "action": {
+        "type": "none"
+      }
+    },
     "ZIGZAG": {
       "color": "#ff4000",
       "action": {
         "type": "notify",
         "message": "Zigzag cast!"
-      }
-    },
-    "HORIZONTAL_LINE": {
-      "color": "#00c828",
-      "action": {
-        "type": "none"
       }
     }
   }
