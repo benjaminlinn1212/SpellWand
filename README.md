@@ -31,7 +31,7 @@ real data in `mac_app/data/` and `mac_app/config.json` are never touched. Delete
 | IMU INT / RST | INT → GPIO 4, RST → GPIO 26. Wire both: they make the link much more reliable. If one is not wired, set it to `-1` in `firmware/src/main.cpp` |
 | IMU mode pins | PS0 and PS1 → GND, which selects I²C. Clone boards like the GY-BNO080/085 may not do this for you |
 | IMU pins left open | BOOT, and ADO/ADDR if your board has it: the firmware tries address 0x4B, then 0x4A |
-| IMU mounting | x axis (printed on the board) along the wand toward the tip; y left and z up when the wand is held level (the Mac app assumes this) |
+| IMU mounting | z axis along the wand toward the tip; with the wand held level, y axis up and x axis to the left. The firmware turns every reading into the wand's own axes (x toward the tip, y left, z up), which the Mac app expects. Mounted another way? Change `toWandAxes()` in `firmware/lib/wand_core/wand_axes.h` |
 | `CAST_BUTTON` | GPIO 27 → button → GND (internal pull-up) |
 | `STATUS_LED` (4-leg RGB LED) | GPIO 18 → 220 Ω → red leg; GPIO 19 → 68–100 Ω → green leg; GPIO 23 → 68–100 Ω → blue leg; long (common) leg → GND |
 | Power: 4× AAA holder with switch | + → ESP32 **5V/VIN** pin; − → ESP32 GND (see Power below) |
@@ -104,7 +104,7 @@ another app without that declaration, makes Python crash immediately with exit c
 
 ```bash
 cd mac_app && .venv/bin/python -m unittest discover -s tests -v      # Mac app: 156 tests
-cd firmware && ~/.platformio/penv/bin/pio test -e native              # wand logic: 33 tests, run on the Mac
+cd firmware && ~/.platformio/penv/bin/pio test -e native              # wand logic: 36 tests, run on the Mac
 ```
 
 Both suites check the same example bytes from `docs/protocol.md`, so the two sides agree on the format.
@@ -232,6 +232,7 @@ repo. The first two replace the wand firmware, so flash it back afterwards with 
 | `led_check` | Check the LED: shows each colour for 3 s and prints which colour it should be |
 | `button_test.py` | Run the 20-press button test, one prompt at a time |
 | `guided_turns.py` | Run the turn test with prompts telling you when to turn (needs the `imu_log` build) |
+| `imu_reset_test.py` | Check that the readings come back after the IMU resets: it resets the IMU and counts the readings (needs the `imu_log` build; nothing to touch) |
 | `link_drive.py` | Run the Bluetooth test with no button: the Mac starts 20 recordings of 5 s each |
 | `capture.py` | Save what the board prints to a file; add `--restart` to include the boot messages |
 
@@ -277,6 +278,6 @@ PNG** to update its picture. Wires and arrows stay attached when you move things
 | Flask `SpellWand UI` | Tested through its API and by hand in a browser with the simulated wand |
 | End-to-end | Tested with the simulated wand; **real end-to-end needs hardware** |
 | Rejection threshold | Default 1.0 works on simulated data; **tune with real recordings** |
-| BNO08x driver | Compiles against the pinned SparkFun library 1.0.6; **never run on a real BNO08x** |
+| BNO08x driver | Runs on the real BNO08x with the pinned SparkFun library 1.0.6: 100 readings per second. After an IMU reset the readings come back in about 0.3 s (`imu_reset_test.py`, 5 of 5 runs); **what makes the IMU reset during use is not yet known** |
 | `tools/hardware_tests/` | Button, turn and capture scripts tested on a fake board; `pin_check` and `led_check` compile; `link_drive.py` has run on the real ESP32, but not in this tidied form |
 | Component test tools (`imu_log` build, `component_tests.py`, `cast_log.csv`) | Reports tested on generated logs; serial logging tried with a fake board; **needs hardware test** |

@@ -28,6 +28,10 @@ The first byte is the message type. Numbers are little-endian.
 Values are rounded to the nearest step and clamped to the `i16` range: ±327.67 m/s² for the
 accelerometer and ±32.767 rad/s (about 1877 °/s) for the gyroscope.
 
+The readings are in the wand's own axes, not the IMU's: x runs along the wand toward the tip,
+y points left and z points up when the wand is held level. The firmware converts them
+(`firmware/lib/wand_core/wand_axes.h`).
+
 ## Commands (Mac → ESP32)
 
 | Type | Name | Payload after the type byte | Size |

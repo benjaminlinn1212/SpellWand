@@ -19,6 +19,7 @@
 #include "protocol.h"
 #include "rgb_led.h"
 #include "send_queue.h"
+#include "wand_axes.h"
 #include "wand_state.h"
 
 // ---- Pins (see the wiring table in README.md) ----
@@ -39,6 +40,7 @@ static const uint32_t SERIAL_BAUD = 115200;
 static const uint16_t IMU_REPORT_INTERVAL_MS = 10;  // 100 Hz accelerometer + gyroscope
 static const uint32_t I2C_FAST_CLOCK_HZ = 400000;   // drop to 100000 if readings are flaky
 static const uint32_t IMU_RETRY_MS = 2000;
+static const uint32_t IMU_STALLED_MS = 450;         // the library gives up on a silent IMU after 500 ms
 static const uint8_t LED_BRIGHTNESS = 255;          // 0-255; the resistors already limit the current
 // Common cathode: the LED's long leg goes to GND. Common anode: long leg to 3.3 V -> set true.
 static const bool STATUS_LED_COMMON_ANODE = false;
@@ -209,10 +211,12 @@ static bool i2cDevicePresent(uint8_t address) {
 }
 
 // Each reading becomes one MotionSample, sent only while CASTING. The BNO08x keeps its own
-// gyro offset up to date, so the readings need no correction here.
+// gyro offset up to date, so the readings need no correction here: they are only turned from
+// the IMU's axes into the wand's (see wand_axes.h).
 static void handleReading(const ImuReading& reading, uint32_t now) {
 #ifdef IMU_SERIAL_LOG
-  // Component test build (env:imu_log): every reading over USB, in the units the Mac receives.
+  // Component test build (env:imu_log): every reading over USB, in the units the Mac receives
+  // and in the IMU's own axes (the ones printed on its board), because these tests check the IMU.
   Serial.printf("IMU,%lu,%.3f,%.3f,%.3f,%.4f,%.4f,%.4f\n", (unsigned long)now, reading.accel[0], reading.accel[1],
                 reading.accel[2], reading.gyro[0], reading.gyro[1], reading.gyro[2]);
 #endif
@@ -221,12 +225,13 @@ static void handleReading(const ImuReading& reading, uint32_t now) {
   protocol::MotionSample sample;
   sample.index = wand.nextSampleIndex();
   sample.t_ms = now;
-  sample.ax = reading.accel[0];
-  sample.ay = reading.accel[1];
-  sample.az = reading.accel[2];
-  sample.gx = reading.gyro[0];
-  sample.gy = reading.gyro[1];
-  sample.gz = reading.gyro[2];
+  ImuReading inWandAxes = toWandAxes(reading);
+  sample.ax = inWandAxes.accel[0];
+  sample.ay = inWandAxes.accel[1];
+  sample.az = inWandAxes.accel[2];
+  sample.gx = inWandAxes.gyro[0];
+  sample.gy = inWandAxes.gyro[1];
+  sample.gz = inWandAxes.gyro[2];
   uint8_t buffer[protocol::MAX_MESSAGE_BYTES];
   sendEvent(buffer, protocol::encodeMotionSample(buffer, sample), false);
 }
@@ -246,9 +251,19 @@ static void onImuReport(void*, sh2_SensorEvent_t* event) {
   }
 }
 
+// The library's own record of the INT pin. Before it writes to the IMU, the library waits up to
+// 500 ms for INT to go low and resets the IMU if it does not. But INT only goes low when the IMU
+// has something to send, and an IMU with no reports switched on has nothing to send. So switching
+// the reports on after a reset would reset the IMU again, for ever. Hiding the pin while we
+// write makes the library write straight away, which the IMU allows at any time.
+extern int8_t _int_pin;
+
 static void enableImuReports() {
+  int8_t intPin = _int_pin;
+  _int_pin = -1;
   bool accelOk = imu.enableAccelerometer(IMU_REPORT_INTERVAL_MS);
   bool gyroOk = imu.enableGyro(IMU_REPORT_INTERVAL_MS);
+  _int_pin = intPin;
   Serial.printf("IMU reports: accelerometer %s, gyroscope %s\n", accelOk ? "on" : "FAILED", gyroOk ? "on" : "FAILED");
 }
 
@@ -261,6 +276,7 @@ static bool startImu() {
       return false;
     }
     sh2_setSensorCallback(onImuReport, nullptr);
+    imu.wasReset();  // begin() resets the IMU itself: forget that one, so loop() reports only later resets
     Wire.setClock(I2C_FAST_CLOCK_HZ);
     if (imu.prodIds.numEntries > 0) {
       const sh2_ProductId_t& id = imu.prodIds.entry[0];
@@ -277,7 +293,17 @@ static bool startImu() {
 // With INT wired, only talk to the IMU when it says data is ready (INT low);
 // otherwise the library blocks for up to 500 ms and then resets the sensor.
 static void readImu() {
-  if (IMU_INT_PIN < 0 || digitalRead(IMU_INT_PIN) == LOW) sh2_service();
+  if (IMU_INT_PIN >= 0 && digitalRead(IMU_INT_PIN) != LOW) return;
+  uint32_t startMs = millis();
+  sh2_service();
+  uint32_t tookMs = millis() - startMs;
+  // The library reads a message in pieces and waits for INT before each piece. A read this long
+  // means the IMU went quiet part-way and the library reset it. A reset WITHOUT this line first
+  // was the IMU restarting by itself: check its power and RST wires.
+  if (tookMs >= IMU_STALLED_MS) {
+    Serial.printf("IMU went quiet for %lu ms in the middle of a message, so the library reset it\n",
+                  (unsigned long)tookMs);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -355,6 +381,14 @@ void loop() {
     imuReady = startImu();
   }
   if (imuReady) {
+#ifdef IMU_SERIAL_LOG
+    // Component test build (env:imu_log): the letter r over USB resets the IMU, so that
+    // tools/hardware_tests/imu_reset_test.py can check that the readings come back.
+    if (Serial.available() && Serial.read() == 'r') {
+      Serial.println("TEST: resetting the IMU");
+      imu.hardwareReset();
+    }
+#endif
     if (imu.wasReset()) {
       Serial.println("IMU reset detected, re-enabling reports");
       enableImuReports();

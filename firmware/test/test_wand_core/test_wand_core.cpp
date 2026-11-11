@@ -11,6 +11,7 @@
 #include "rgb_led.h"
 #include "protocol.h"
 #include "send_queue.h"
+#include "wand_axes.h"
 #include "wand_state.h"
 
 void setUp() {}
@@ -352,6 +353,38 @@ static void test_every_gyro_report_gives_a_reading_even_without_a_new_accelerome
   TEST_ASSERT_EQUAL_FLOAT(1.0f, reading.accel[0]);
 }
 
+// ---------- turning readings from the IMU's axes into the wand's axes ----------
+// Wand axes: x along the wand toward the tip, y to the left, z up (wand held level).
+// On this wand the IMU's z axis points to the tip and its y axis is up.
+
+static void test_gravity_reads_along_the_wands_x_axis_when_the_tip_points_straight_up() {
+  ImuReading imu = {{0.0f, 0.0f, 9.8f}, {0.0f, 0.0f, 0.0f}};  // tip up: the IMU's z axis is up
+  ImuReading wand = toWandAxes(imu);
+  TEST_ASSERT_EQUAL_FLOAT(9.8f, wand.accel[0]);
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, wand.accel[1]);
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, wand.accel[2]);
+}
+
+static void test_gravity_reads_along_the_wands_z_axis_when_the_wand_is_held_level() {
+  ImuReading imu = {{0.0f, 9.8f, 0.0f}, {0.0f, 0.0f, 0.0f}};  // level: the IMU's y axis is up
+  ImuReading wand = toWandAxes(imu);
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, wand.accel[0]);
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, wand.accel[1]);
+  TEST_ASSERT_EQUAL_FLOAT(9.8f, wand.accel[2]);
+}
+
+static void test_rotation_is_turned_into_the_wands_axes_the_same_way_as_acceleration() {
+  ImuReading imu = {{1.0f, 2.0f, 3.0f}, {0.1f, 0.2f, 0.3f}};
+  ImuReading wand = toWandAxes(imu);
+  // wand x = IMU z, wand y = IMU x, wand z = IMU y
+  TEST_ASSERT_EQUAL_FLOAT(3.0f, wand.accel[0]);
+  TEST_ASSERT_EQUAL_FLOAT(1.0f, wand.accel[1]);
+  TEST_ASSERT_EQUAL_FLOAT(2.0f, wand.accel[2]);
+  TEST_ASSERT_EQUAL_FLOAT(0.3f, wand.gyro[0]);  // twisting the wand about its own length
+  TEST_ASSERT_EQUAL_FLOAT(0.1f, wand.gyro[1]);
+  TEST_ASSERT_EQUAL_FLOAT(0.2f, wand.gyro[2]);
+}
+
 // ---------- STATUS_LED as a 4-leg RGB LED (PWM on three pins) ----------
 
 static void test_common_cathode_led_is_driven_by_brightness_directly() {
@@ -492,5 +525,8 @@ int main() {
   RUN_TEST(test_gyro_report_is_paired_with_the_accelerometer_report);
   RUN_TEST(test_the_newest_accelerometer_report_is_used);
   RUN_TEST(test_every_gyro_report_gives_a_reading_even_without_a_new_accelerometer_report);
+  RUN_TEST(test_gravity_reads_along_the_wands_x_axis_when_the_tip_points_straight_up);
+  RUN_TEST(test_gravity_reads_along_the_wands_z_axis_when_the_wand_is_held_level);
+  RUN_TEST(test_rotation_is_turned_into_the_wands_axes_the_same_way_as_acceleration);
   return UNITY_END();
 }
