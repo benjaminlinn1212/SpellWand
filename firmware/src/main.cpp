@@ -42,8 +42,9 @@ static const uint32_t I2C_FAST_CLOCK_HZ = 400000;   // drop to 100000 if reading
 static const uint32_t IMU_RETRY_MS = 2000;
 static const uint32_t IMU_STALLED_MS = 450;         // the library gives up on a silent IMU after 500 ms
 static const uint8_t LED_BRIGHTNESS = 255;          // 0-255; the resistors already limit the current
-// Common cathode: the LED's long leg goes to GND. Common anode: long leg to 3.3 V -> set true.
-static const bool STATUS_LED_COMMON_ANODE = false;
+// This wand's LED is common anode: its long leg goes to 3.3 V and a colour lights when its pin is
+// LOW. For a common cathode LED (long leg to GND) set this to false.
+static const bool STATUS_LED_COMMON_ANODE = true;
 static const uint32_t LED_PWM_HZ = 5000;            // fast enough that the eye sees no flicker
 
 // BLE_LINK identifiers: must match mac_app/protocol.py

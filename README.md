@@ -33,15 +33,16 @@ real data in `mac_app/data/` and `mac_app/config.json` are never touched. Delete
 | IMU pins left open | BOOT, and ADO/ADDR if your board has it: the firmware tries address 0x4B, then 0x4A |
 | IMU mounting | z axis along the wand toward the tip; with the wand held level, y axis up and x axis to the left. The firmware turns every reading into the wand's own axes (x toward the tip, y left, z up), which the Mac app expects. Mounted another way? Change `toWandAxes()` in `firmware/lib/wand_core/wand_axes.h` |
 | `CAST_BUTTON` | GPIO 27 → button → GND (internal pull-up) |
-| `STATUS_LED` (4-leg RGB LED) | GPIO 18 → 220 Ω → red leg; GPIO 19 → 68–100 Ω → green leg; GPIO 23 → 68–100 Ω → blue leg; long (common) leg → GND |
+| `STATUS_LED` (4-leg RGB LED) | GPIO 18 → 220 Ω → red leg; GPIO 19 → 68–100 Ω → green leg; GPIO 23 → 68–100 Ω → blue leg; long (common) leg → ESP32 3V3 (common anode LED) |
 | Power: 4× AAA holder with switch | + → ESP32 **5V/VIN** pin; − → ESP32 GND (see Power below) |
 
 **RGB LED legs:** the longest leg is the common one. On most 5 mm RGB LEDs the order is red, common, green,
-blue, but check yours: with the common leg on GND, touch each other leg to 3V3 through a resistor and see
+blue, but check yours: with the common leg on 3V3, touch each other leg to GND through a resistor and see
 which colour lights.
 
-**RGB LED type:** if your LED is *common anode* (the long leg must go to 3.3 V instead of GND), wire the long
-leg to the ESP32's 3V3 pin and set `STATUS_LED_COMMON_ANODE = true` in `firmware/src/main.cpp`. Green and blue
+**RGB LED type:** this wand's LED is *common anode*: the long leg goes to 3.3 V and a colour lights when its
+pin is LOW. If your LED is *common cathode* (the long leg must go to GND instead), wire the long leg to GND
+and set `STATUS_LED_COMMON_ANODE = false` in `firmware/src/main.cpp`. Green and blue
 need about 3 V of the 3.3 V available, hence their smaller resistors; they will still look a little dimmer than red.
 
 ## Power
