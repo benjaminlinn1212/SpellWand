@@ -4,7 +4,7 @@ Sample Recorder, the Gesture Classifier and the Action Dispatcher.
 The SpellWand UI (app.py) calls its methods and listens to the events it publishes:
   status        connection, wand state, recording, dataset counts
   cast_start    a cast or training recording began
-  motion        a batch of live MotionSamples
+  motion        a batch of live MotionSamples, and where the wand tip was at each
   result        a GestureResult, with the motion for display
   action        what the Action Dispatcher did
   sample_saved  a training recording was saved
@@ -27,7 +27,7 @@ import numpy as np
 from action_dispatcher import ActionDispatcher, show_mac_notification
 from classifier import MIN_SAMPLES, GestureClassifier, leave_one_out
 from config import CONFIG_PATH, load_config, save_config
-from motion_trace import tip_trace
+from motion_trace import LiveTipTrace, tip_trace
 from protocol import (
     CastEnd, CastStart, MotionSample, ProtocolError, END_MAX_DURATION, SOURCE_RECORDING,
     decode_event, encode_gesture_result, encode_start_recording, encode_stop_recording,
@@ -71,6 +71,9 @@ class SpellWandController:
         self._wand_state = "IDLE"
         self._cast_source = None
         self._cast_samples = []
+        self._live_trace = None    # follows the wand tip during a cast, for the UI's live path
+        self._live_tip = []        # tip positions not yet sent to the UI
+        self._live_index = None    # index of the newest MotionSample the live path has used
         self._recording_label = None
         self._dataset_counts = {}
         self._history = deque(maxlen=20)
@@ -227,6 +230,7 @@ class SpellWandController:
             with self._lock:
                 self._cast_source = event.source
                 self._cast_samples = []
+                self._live_trace, self._live_tip, self._live_index = LiveTipTrace(), [], None
                 self._wand_state = "CASTING"
             self._publish("cast_start", {"source": "recording" if event.source == SOURCE_RECORDING else "button"})
             self._publish_status()
@@ -236,10 +240,19 @@ class SpellWandController:
                 if self._cast_source is None:
                     return  # a stray sample outside a cast
                 self._cast_samples.append(event)
+                if self._live_index is None or event.index > self._live_index:  # BLE can deliver one twice
+                    self._live_index = event.index
+                    self._live_tip += self._live_trace.add(
+                        event.t_ms, [event.ax, event.ay, event.az, event.gx, event.gy, event.gz])
                 full_batch = len(self._cast_samples) % MOTION_BATCH == 0
                 batch = self._cast_samples[-MOTION_BATCH:] if full_batch else None
+                if batch:
+                    tip, self._live_tip = self._live_tip, []
             if batch:
-                self._publish("motion", {"rows": [[s.t_ms, s.ax, s.ay, s.az, s.gx, s.gy, s.gz] for s in batch]})
+                self._publish("motion", {
+                    "rows": [[s.t_ms, s.ax, s.ay, s.az, s.gx, s.gy, s.gz] for s in batch],
+                    "tip": [np.round(point, 4).tolist() for point in tip],
+                })
 
         elif isinstance(event, CastEnd):
             received = time.perf_counter()

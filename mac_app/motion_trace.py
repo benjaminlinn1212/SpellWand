@@ -26,6 +26,39 @@ def tip_trace(sequence, wand_length_m=WAND_LENGTH_M):
     return orientations(sequence) @ np.array([wand_length_m, 0.0, 0.0])
 
 
+class LiveTipTrace:
+    """The same trace as tip_trace, worked out one MotionSample at a time, so the UI can
+    draw the path while the cast is still going on."""
+
+    def __init__(self, wand_length_m=WAND_LENGTH_M):
+        self._tip_in_wand = np.array([wand_length_m, 0.0, 0.0])
+        self._turned = np.eye(3)   # how the wand has turned since its first sample
+        self._previous = None      # time (s) and gyro reading of the sample before
+        self._tilt = None          # the starting tilt, once enough samples show which way is up
+        self._waiting = []         # until then: (turned, accelerometer reading) of each sample
+
+    def add(self, t_ms, imu):
+        """Take the next MotionSample (imu = ax, ay, az, gx, gy, gz) and return the tip
+        positions that are now known: none for the first few samples, which are needed to
+        find "up", then those samples' positions all at once, then one per sample."""
+        imu = np.asarray(imu, dtype=float)
+        t_s = float(t_ms) / 1000.0
+        if self._previous is not None:
+            previous_t_s, previous_gyro = self._previous
+            self._turned = self._turned @ _rotation(0.5 * (previous_gyro + imu[3:6]) * (t_s - previous_t_s))
+        self._previous = (t_s, imu[3:6])
+
+        if self._tilt is not None:
+            return [self._tilt @ self._turned @ self._tip_in_wand]
+        self._waiting.append((self._turned, imu[0:3]))
+        if len(self._waiting) < GRAVITY_SAMPLES:
+            return []
+        self._tilt = _tilt_from_gravity(np.mean([turned @ accel for turned, accel in self._waiting], axis=0))
+        points = [self._tilt @ turned @ self._tip_in_wand for turned, _ in self._waiting]
+        self._waiting = []
+        return points
+
+
 def gravity_in_wand(sequence):
     """Return an (N x 3) array: what gravity alone would make the accelerometer read at
     each MotionSample, given how the wand was turned at that moment. Subtracting this

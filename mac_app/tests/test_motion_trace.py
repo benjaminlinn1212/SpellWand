@@ -9,7 +9,7 @@ import unittest
 import numpy as np
 
 from classifier import GestureSequence
-from motion_trace import tip_trace
+from motion_trace import LiveTipTrace, tip_trace
 from simulator import make_gesture
 
 G = 9.81
@@ -71,6 +71,25 @@ class TipTraceTest(unittest.TestCase):
                 trace = tip_trace(make_gesture("HORIZONTAL_LINE", np.random.default_rng(seed)), wand_length_m=L)
                 left_right, up_down = np.ptp(trace[:, 1]), np.ptp(trace[:, 2])
                 self.assertLess(up_down, 0.5 * left_right)
+
+
+class LiveTipTraceTest(unittest.TestCase):
+    # The same trace, worked out one MotionSample at a time while the cast is still going on.
+
+    def live_points(self, sequence):
+        live = LiveTipTrace(wand_length_m=L)
+        return [live.add(t_ms, row) for t_ms, row in zip(sequence.t_ms, sequence.imu)]
+
+    def test_live_trace_matches_the_trace_of_the_whole_cast(self):
+        for gesture in ("CIRCLE", "ZIGZAG", "HORIZONTAL_LINE"):
+            with self.subTest(gesture=gesture):
+                sequence = make_gesture(gesture, np.random.default_rng(3))
+                points = [point for new in self.live_points(sequence) for point in new]
+                np.testing.assert_allclose(points, tip_trace(sequence, wand_length_m=L), atol=1e-9)
+
+    def test_live_trace_waits_for_the_first_readings_that_show_which_way_is_up(self):
+        new = self.live_points(make_gesture("CIRCLE", np.random.default_rng(3)))
+        self.assertEqual([len(points) for points in new[:7]], [0, 0, 0, 0, 5, 1, 1])
 
 
 if __name__ == "__main__":

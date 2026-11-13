@@ -96,6 +96,18 @@ class ControllerTest(unittest.TestCase):
         self.assertEqual(len(result["trace"]["x"]), n)
         self.assertEqual(len(result["accel"][0]), n)
 
+    def test_live_motion_carries_the_tip_path_so_the_ui_can_draw_it_during_the_cast(self):
+        self.wand.cast("ZIGZAG")
+        events = []
+        while not self.events.empty():
+            events.append(self.events.get_nowait())
+        live = [point for e in events if e["type"] == "motion" for point in e["data"]["tip"]]
+        [result] = [e["data"] for e in events if e["type"] == "result"]
+        whole = np.column_stack([result["trace"]["x"], result["trace"]["y"], result["trace"]["z"]])
+        self.assertGreater(len(live), 50)
+        self.assertGreater(len(live), len(whole) - 5)  # all but the last few, which wait for a full batch
+        np.testing.assert_allclose(live, whole[:len(live)], atol=1e-4)
+
     def test_result_says_how_long_the_mac_took_to_answer(self):
         self.wand.cast("CIRCLE")
         [result] = self.published("result")
