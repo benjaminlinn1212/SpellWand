@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>SpellWand</title>
+<title>Grimoire | SpellWand</title>
 <script>
   // Choose the theme before the page paints: the saved choice, or else the system's.
   (function () {
@@ -25,7 +25,7 @@
 
 <header class="masthead">
   <div class="masthead-inner">
-    <h1 class="wordmark">SpellWand</h1>
+    <h1 class="wordmark">Grimoire</h1>
     <div class="status" aria-live="polite">
       <span class="link"><span id="link-dot" class="dot"></span><span id="link-text">Not connected</span></span>
       <span id="wand-state" class="wand-state" data-state="OFFLINE" title="What the wand's status LED is showing">Offline</span>
@@ -60,7 +60,7 @@
   </figure>
 
   <aside class="panel result">
-    <h2>Last cast</h2>
+    <h2><span>Last cast</span></h2>
     <div id="verdict" class="verdict empty">
       <p id="verdict-label" class="spell">Waiting for a cast</p>
     </div>
@@ -83,7 +83,7 @@
     </dl>
     <p id="verdict-action" class="action"></p>
 
-    <h2>Recent casts</h2>
+    <h2><span>Recent casts</span></h2>
     <ol id="history" class="history"></ol>
   </aside>
 
@@ -100,7 +100,7 @@
 
   <section class="panel dataset" aria-labelledby="dataset-heading">
     <div class="panel-head">
-      <h2 id="dataset-heading">Dataset</h2>
+      <h2 id="dataset-heading"><span>Dataset</span></h2>
       <button id="check-dataset" type="button" class="quiet">Check dataset</button>
     </div>
     <p id="dataset-summary" class="hint"></p>
@@ -116,7 +116,7 @@
 
   <div class="side">
     <section class="panel" aria-labelledby="train-heading">
-      <h2 id="train-heading">Train a gesture</h2>
+      <h2 id="train-heading"><span>Train a gesture</span></h2>
       <p class="hint">Pick a gesture, start recording, perform it once, then stop. You don't need to hold the cast button.</p>
       <div class="row">
         <label class="field grow">
@@ -132,28 +132,31 @@
       </div>
     </section>
 
-    <section class="panel" aria-labelledby="settings-heading">
-      <h2 id="settings-heading">Recognition settings</h2>
-      <label class="field">
-        <span>Rejection threshold</span>
+    <section class="panel settings" aria-labelledby="settings-heading">
+      <h2 id="settings-heading"><span>Recognition settings</span></h2>
+
+      <div class="setting">
+        <label for="threshold">Rejection threshold</label>
         <input id="threshold" type="number" step="0.05" min="0.05" aria-describedby="threshold-help">
-      </label>
-      <p id="threshold-help" class="hint">A cast farther than this from every example counts as UNKNOWN. Lower is stricter.</p>
-      <table class="gestures">
-        <thead><tr><th>Gesture</th><th>Colour</th><th>When cast</th><th>Remove</th></tr></thead>
-        <tbody id="gesture-rows"></tbody>
-      </table>
-      <div class="row">
+        <p id="threshold-help" class="hint">A cast farther than this from every example counts as UNKNOWN. Lower is stricter.</p>
+      </div>
+
+      <h3 id="gestures-heading">Gestures</h3>
+      <p class="hint">The square is the colour the wand's light flashes. Below it: what the Mac does when the gesture is cast.</p>
+      <ul id="gesture-rows" class="gestures" aria-labelledby="gestures-heading"></ul>
+      <div class="gesture-item">
+        <button id="unknown-color" type="button" class="swatch-button" aria-label="UNKNOWN colour" aria-haspopup="dialog"></button>
+        <span class="gesture-name">UNKNOWN</span>
+        <p class="gesture-note">A cast that matches no gesture.</p>
+      </div>
+
+      <div class="row add-row">
         <label class="field grow">
           <span>New gesture</span>
           <input id="new-gesture" placeholder="For example TRIANGLE" maxlength="16">
         </label>
         <button id="add-gesture" type="button" class="quiet">Add gesture</button>
       </div>
-      <label class="field inline">
-        <span>Colour for UNKNOWN</span>
-        <input id="unknown-color" type="color">
-      </label>
       <div class="save-row">
         <button id="save-settings" type="button">Save settings</button>
       </div>
@@ -162,6 +165,14 @@
 </main>
 
 </div>
+
+<footer class="colophon">
+  <div class="colophon-inner">
+    <p>Grimoire is the Mac app for SpellWand, a gesture wand by Disneers Corp.</p>
+    <p>Developed by Benjamin Lin, <a href="https://github.com/benjaminlinn1212" target="_blank" rel="noopener">github.com/benjaminlinn1212</a></p>
+    <p>© 2026 Disneers Corp</p>
+  </div>
+</footer>
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 </body>

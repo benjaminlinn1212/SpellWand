@@ -1,6 +1,11 @@
 // SpellWand UI: talks to app.py's JSON API and listens to its live event stream.
 
 const NEW_GESTURE_COLOR = "#b48cff";  // the LED colour a newly added gesture starts with
+// Colours the wand's LED shows well: bright, and easy to tell apart.
+const LED_COLORS = [
+  "#ff0000", "#ff4000", "#ffaa00", "#ffe600", "#00c828", "#00d6a0",
+  "#00b4ff", "#0050ff", "#7a3cff", "#d028ff", "#ff2d8a", "#ffffff",
+];
 const AXES = ["x (along wand)", "y (left)", "z (up)"];
 const CHART_FONT = "Archivo, 'Helvetica Neue', Arial, sans-serif";
 const MOTION_NAMES = {
@@ -11,7 +16,10 @@ const MOTION_NAMES = {
   STILL: "Hold it still",
 };
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-const plotConfig = { displayModeBar: false, responsive: true };
+// A double-click on a zoomed chart zooms back out. Plotly's own limit of 0.3 s between the two
+// presses is shorter than an ordinary double-click, so it is raised to the Mac's usual 0.5 s.
+const plotConfig = { displayModeBar: false, responsive: true, doubleClickDelay: 500 };
+const SIGNAL_CHARTS = ["accel-chart", "gyro-chart"];
 
 const state = {
   status: null, config: null, meta: null, samples: [], checks: {},
@@ -35,8 +43,11 @@ function readInk() {
     strong: value("--line-strong"),
     surface: value("--surface"),
     series: [value("--series-x"), value("--series-y"), value("--series-z")],
-    // the motion view is a dark stage in both themes
+    // the motion view
+    stage: value("--stage"),
+    stageWall: value("--stage-wall"),
     stageLine: value("--stage-line"),
+    stageZero: value("--stage-zero"),
     stageText: value("--stage-text"),
     stageLight: value("--stage-light"),
   };
@@ -137,7 +148,9 @@ function recordedAt(sampleId) {
 
 // ---------- live signal charts ----------
 
-function signalLayout() {
+// An empty chart cannot be zoomed (fixedrange): with no readings to fit, Plotly has nothing to
+// zoom back out to, and the chart would stay stuck on whatever was dragged.
+function signalLayout(empty = false) {
   return {
     paper_bgcolor: "rgba(0,0,0,0)",
     plot_bgcolor: "rgba(0,0,0,0)",
@@ -146,8 +159,8 @@ function signalLayout() {
     legend: { orientation: "h", x: 1, xanchor: "right", y: 1, yanchor: "bottom", font: { color: ink.text } },
     hovermode: "x unified",
     hoverlabel: { bgcolor: ink.surface, bordercolor: ink.strong, font: { family: CHART_FONT, color: ink.text, size: 12 } },
-    xaxis: { title: { text: "seconds", standoff: 8 }, hoverformat: ".2f", gridcolor: ink.line, zeroline: false },
-    yaxis: { gridcolor: ink.line, zerolinecolor: ink.strong },
+    xaxis: { title: { text: "seconds", standoff: 8 }, hoverformat: ".2f", gridcolor: ink.line, zeroline: false, fixedrange: empty },
+    yaxis: { gridcolor: ink.line, zerolinecolor: ink.strong, fixedrange: empty },
   };
 }
 
@@ -157,9 +170,32 @@ function signalTraces(t = [], columns = [[], [], []]) {
   }));
 }
 
+// Draws one sensor chart. A fresh drawing shows the whole cast, so its Reset zoom button goes.
+function drawSignal(id, traces) {
+  const empty = !traces.some((trace) => trace.x.length);
+  Plotly.react(id, traces, signalLayout(empty), plotConfig);
+  showZoomButton(id);
+}
+
 function setSignals(t, accel, gyro) {
-  Plotly.react("accel-chart", signalTraces(t, accel), signalLayout(), plotConfig);
-  Plotly.react("gyro-chart", signalTraces(t, gyro), signalLayout(), plotConfig);
+  drawSignal("accel-chart", signalTraces(t, accel));
+  drawSignal("gyro-chart", signalTraces(t, gyro));
+}
+
+// A chart that is zoomed in (drag across it) shows a Reset zoom button in its corner.
+function showZoomButton(id) {
+  const button = document.querySelector(`[data-zoom-out="${id}"]`);
+  const { xaxis, yaxis } = $(id).layout;
+  if (button) button.hidden = xaxis.autorange !== false && yaxis.autorange !== false;
+}
+
+function wireZoomButtons() {
+  for (const id of SIGNAL_CHARTS) {
+    const button = el("button", { type: "button", className: "quiet zoom-out", hidden: true, "data-zoom-out": id }, "Reset zoom");
+    button.addEventListener("click", () => Plotly.relayout(id, { "xaxis.autorange": true, "yaxis.autorange": true }));
+    $(id).parentElement.append(button);
+    $(id).on("plotly_relayout", () => showZoomButton(id));
+  }
 }
 
 function appendSignals(rows) {
@@ -196,13 +232,28 @@ function fittedBox(trace) {
   });
 }
 
+// The side of one grid square: a sixth of the wand's length, rounded to 1, 2 or 5 of a unit
+// (5 cm for a 30 cm wand). It depends on the wand alone, so the grid stays the same while the
+// view closes in on a trail.
+function gridStep(trace) {
+  const raw = fullBox(trace)[0][1] / 6.6;
+  const unit = 10 ** Math.floor(Math.log10(raw));
+  const digit = raw / unit;
+  return (digit < 1.5 ? 1 : digit < 3.5 ? 2 : digit < 7.5 ? 5 : 10) * unit;
+}
+
 // box = the range shown along each axis: [[x from, x to], [y from, y to], [z from, z to]]
-function trailLayout(box) {
+// The view is a room: three walls ruled in squares of `step`, the same size on every wall, and
+// on each wall a stronger line level with your hand.
+function trailLayout(box, step) {
   const sizes = box.map(([lo, hi]) => hi - lo);
   const largest = Math.max(...sizes);
   const axis = (title, range) => ({
     title: { text: title, font: { family: CHART_FONT, color: ink.stageText, size: 12 } },
-    range, showbackground: false, gridcolor: ink.stageLine, zeroline: false,
+    range, tick0: 0, dtick: step,
+    showbackground: true, backgroundcolor: ink.stageWall,
+    gridcolor: ink.stageLine, gridwidth: 1,
+    zeroline: true, zerolinecolor: ink.stageZero, zerolinewidth: 2,
     showticklabels: false, showspikes: false,
   });
   return {
@@ -221,11 +272,32 @@ function trailLayout(box) {
   };
 }
 
-// color = null draws the trail in plain light: the spell is not known yet.
+// How bright a colour ("#rrggbb") is, from 0 (black) to 1 (white).
+function luminance(color) {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(color.slice(i, i + 2), 16) / 255)
+    .map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+// A spell's colour as drawn in the motion view. A colour too close to the background (yellow
+// or white on the light one) is mixed toward the text colour until it stands out.
+function onStage(color) {
+  const ratio = (a, b) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+  const back = luminance(ink.stage);
+  const part = (hex, i) => parseInt(hex.slice(i, i + 2), 16);
+  let shown = color;
+  for (let share = 0.15; share <= 0.75 && ratio(luminance(shown), back) < 2.4; share += 0.15) {
+    shown = "#" + [1, 3, 5].map((i) => Math.round(part(color, i) * (1 - share) + part(ink.text, i) * share)
+      .toString(16).padStart(2, "0")).join("");
+  }
+  return shown;
+}
+
+// color = null draws the trail in the theme colour: the spell is not known yet.
 function trailTraces(trace, color, count) {
   const x = trace.x.slice(0, count), y = trace.y.slice(0, count), z = trace.z.slice(0, count);
   const tip = count - 1;
-  const stroke = color ?? ink.stageLight;
+  const stroke = color ? onStage(color) : ink.stageLight;
   const line = (width, opacity) => ({
     type: "scatter3d", mode: "lines", x, y, z, opacity, hoverinfo: "skip", line: { width, color: stroke },
   });
@@ -320,11 +392,11 @@ function paintTrail(count, box) {
     // Just the hand, so the empty scene is still 3D (an empty plot would default to 2D).
     const hand = { type: "scatter3d", mode: "markers", x: [0], y: [0], z: [0], hoverinfo: "skip",
       marker: { size: 4, color: ink.stageText } };
-    Plotly.react("trail", [hand], trailLayout(trail.box), plotConfig);
+    Plotly.react("trail", [hand], trailLayout(trail.box, gridStep(null)), plotConfig);
     return;
   }
   const traces = trailTraces(trail.trace, trail.color, count ?? trail.trace.x.length);
-  Plotly.react("trail", traces, trailLayout(box ?? trail.box), plotConfig);
+  Plotly.react("trail", traces, trailLayout(box ?? trail.box, gridStep(trail.trace)), plotConfig);
 }
 
 // While a cast is going on, the trail grows as the tip positions arrive (in plain light: the
@@ -349,11 +421,10 @@ function extendLiveTrail(points) {
 
 // After a theme change: every chart again, in the new colours.
 function redrawCharts() {
-  for (const id of ["accel-chart", "gyro-chart"]) {
+  for (const id of SIGNAL_CHARTS) {
     const shown = $(id).data;
     if (!shown) continue;
-    const traces = shown.map((trace, i) => ({ ...trace, line: { ...trace.line, color: ink.series[i] } }));
-    Plotly.react(id, traces, signalLayout(), plotConfig);
+    drawSignal(id, shown.map((trace, i) => ({ ...trace, line: { ...trace.line, color: ink.series[i] } })));
   }
   if (state.trail) {
     cancelAnimationFrame(trailFrame);
@@ -375,10 +446,11 @@ function renderStatus(status) {
   state.status = status;
   const connected = status.connected;
   $("link-dot").className = "dot" + (connected ? " connected" : "");
-  $("link-text").textContent = !connected ? "Not connected"
+  $("link-text").textContent = !connected ? "No wand connected"
     : status.mode === "simulated" ? "Simulated wand connected" : "Wand connected";
+  // The wand's own state shows only while a wand is connected (style.css hides OFFLINE).
   const chip = $("wand-state");
-  chip.textContent = connected ? status.wand_state : "Offline";
+  chip.textContent = connected ? status.wand_state : "";
   chip.dataset.state = connected ? status.wand_state : "OFFLINE";
 
   $("connect-ble").hidden = connected;
@@ -438,9 +510,7 @@ function renderDatasetSummary(counts) {
 
 // Black or white, whichever is easier to read on this colour ("#rrggbb").
 function textOn(color) {
-  const [r, g, b] = [1, 3, 5].map((i) => parseInt(color.slice(i, i + 2), 16) / 255)
-    .map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.179 ? "#16161a" : "#ffffff";
+  return luminance(color) > 0.179 ? "#16161a" : "#ffffff";
 }
 
 // The spell's name stays on one line: a long name gets smaller letters.
@@ -508,6 +578,95 @@ function showAction(outcome) {
     : `The action didn't work: ${outcome.detail}`;
 }
 
+// ---------- colour chooser ----------
+// A colour square is a button that holds its colour as its value. Pressing it opens one small
+// panel under it: the colours the wand's LED shows well, and a field for any other colour.
+
+const colors = { box: null, hex: null, target: null };
+
+function setSwatch(button, color) {
+  button.value = color;
+  button.style.setProperty("--swatch", color);
+}
+
+function swatchButton(color, name, className) {
+  const button = el("button", { type: "button", className: `swatch-button ${className}`,
+    "aria-label": `${name} colour`, "aria-haspopup": "dialog" });
+  setSwatch(button, color);
+  button.addEventListener("click", () => openColors(button, name));
+  return button;
+}
+
+function buildColors() {
+  const presets = LED_COLORS.map((color) => {
+    const choice = el("button", { type: "button", className: "swatch-button", title: color, "aria-label": color });
+    setSwatch(choice, color);
+    choice.addEventListener("click", () => {
+      setSwatch(colors.target, color);
+      closeColors();
+    });
+    return choice;
+  });
+  colors.hex = el("input", { type: "text", maxLength: 7, spellcheck: false, autocomplete: "off", placeholder: "#00aaff" });
+  colors.hex.addEventListener("input", () => {   // any other colour, as soon as it is complete
+    const color = colors.hex.value.trim().toLowerCase();
+    if (!/^#[0-9a-f]{6}$/.test(color)) return;
+    setSwatch(colors.target, color);
+    markColor(color);
+  });
+  colors.hex.addEventListener("keydown", (e) => { if (e.key === "Enter") closeColors(); });
+  colors.box = el("div", { className: "color-pop", hidden: true }, [
+    el("p", { className: "color-title" }),
+    el("div", { className: "color-presets" }, presets),
+    el("label", { className: "color-hex" }, [el("span", {}, "Other"), colors.hex]),
+  ]);
+  colors.box.setAttribute("role", "dialog");
+  document.body.append(colors.box);
+
+  document.addEventListener("pointerdown", (e) => {   // a press anywhere else closes it
+    if (colors.target && !colors.box.contains(e.target) && e.target !== colors.target) closeColors(false);
+  });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && colors.target) closeColors(); });
+  window.addEventListener("resize", () => { if (colors.target) closeColors(false); });
+}
+
+function markColor(color) {
+  for (const choice of colors.box.querySelectorAll(".color-presets button")) {
+    choice.setAttribute("aria-pressed", String(choice.value === color));
+  }
+}
+
+function openColors(button, name) {
+  if (colors.target === button) return closeColors();
+  if (colors.target) closeColors(false);
+  colors.target = button;
+  button.setAttribute("aria-expanded", "true");
+  const box = colors.box;
+  box.querySelector(".color-title").textContent = `Colour for ${name}`;
+  box.setAttribute("aria-label", `Colour for ${name}`);
+  colors.hex.value = button.value;
+  markColor(button.value);
+  box.hidden = false;
+
+  // Under the square, or above it when there is no room below; never off the side of the page.
+  const at = button.getBoundingClientRect();
+  const pageWidth = document.documentElement.clientWidth;
+  const left = Math.max(12, Math.min(at.left, pageWidth - box.offsetWidth - 12));
+  const below = at.bottom + 8 + box.offsetHeight <= window.innerHeight || at.top - 8 - box.offsetHeight < 0;
+  const top = below ? at.bottom + 8 : at.top - 8 - box.offsetHeight;
+  box.style.left = `${left + window.scrollX}px`;
+  box.style.top = `${top + window.scrollY}px`;
+  (box.querySelector('[aria-pressed="true"]') ?? colors.hex).focus({ preventScroll: true });
+}
+
+function closeColors(returnFocus = true) {
+  if (!colors.target) return;
+  colors.box.hidden = true;
+  colors.target.setAttribute("aria-expanded", "false");
+  if (returnFocus) colors.target.focus();
+  colors.target = null;
+}
+
 // ---------- settings ----------
 
 function actionEditor(action) {
@@ -535,21 +694,21 @@ function actionEditor(action) {
 function renderConfig() {
   const config = state.config;
   $("threshold").value = config.dtw_threshold;
-  $("unknown-color").value = config.unknown_color;
+  setSwatch($("unknown-color"), config.unknown_color);
   if (!state.resultShown) showGauge(null, config.dtw_threshold);
   $("gesture-rows").replaceChildren(...Object.entries(config.gestures).map(([label, settings]) => {
-    const remove = el("button", { type: "button", className: "danger" }, "Remove");
+    const remove = el("button", { type: "button", className: "text danger", "aria-label": `Remove ${label}` }, "Remove");
     remove.addEventListener("click", () => {
       state.config = readConfigForm();
       delete state.config.gestures[label];
       renderConfig();
       toast(`Removed ${label}. Its samples stay in the dataset. Press Save settings to apply.`);
     });
-    const row = el("tr", {}, [
-      el("td", {}, label),
-      el("td", {}, el("input", { type: "color", className: "gesture-color", value: settings.color, "aria-label": `${label} colour` })),
-      el("td", {}, actionEditor(settings.action)),
-      el("td", {}, remove),
+    const row = el("li", { className: "gesture-item" }, [
+      swatchButton(settings.color, label, "gesture-color"),
+      el("span", { className: "gesture-name" }, label),
+      remove,
+      actionEditor(settings.action),
     ]);
     row.dataset.label = label;
     return row;
@@ -592,6 +751,7 @@ function addGesture() {
   state.config.gestures[name] = { color: NEW_GESTURE_COLOR, action: { type: "none" } };
   $("new-gesture").value = "";
   renderConfig();
+  $("gesture-rows").lastElementChild.classList.add("new");
   toast(`Added ${name}. Press Save settings to keep it, then record some examples.`);
 }
 
@@ -613,7 +773,7 @@ function checkText(check) {
 function renderSamples() {
   const rows = state.samples.map((sample) => {
     const [text, cls] = checkText(state.checks[sample.sample_id]);
-    const view = el("button", { type: "button", className: "quiet" }, "View");
+    const view = el("button", { type: "button", className: "text" }, "View");
     view.addEventListener("click", () => attempt(async () => {
       // Fetch the sample while the page scrolls up; the replay starts once the motion view is in sight.
       const [detail] = await Promise.all([
@@ -624,7 +784,7 @@ function renderSamples() {
       drawTrail(detail, colorFor(detail.label), `${detail.label} sample recorded ${recordedAt(sample.sample_id)}`, true, true);
       setSignals(detail.t, detail.accel, detail.gyro);
     }));
-    const remove = el("button", { type: "button", className: "danger" }, "Delete");
+    const remove = el("button", { type: "button", className: "text danger" }, "Delete");
     remove.addEventListener("click", () => attempt(async () => {
       if (!confirm(`Delete this ${sample.label} sample? This can't be undone.`)) return;
       await api("DELETE", `/api/samples/${encodeURIComponent(sample.sample_id)}`);
@@ -644,6 +804,14 @@ function renderSamples() {
     ]);
   });
   $("sample-rows").replaceChildren(...rows);
+  markTableOverflow();
+}
+
+// A narrow window makes the table scroll sideways. Its last column (View, Delete) stays in
+// sight then, and gets a line at its edge to show that the rest slides under it.
+function markTableOverflow() {
+  const frame = document.querySelector(".table-scroll");
+  frame.classList.toggle("overflowing", frame.scrollWidth > frame.clientWidth);
 }
 
 async function checkDataset() {
@@ -694,6 +862,7 @@ function listen() {
   events.onerror = () => {
     $("link-dot").className = "dot";
     $("link-text").textContent = "Lost contact with app.py. Is it still running?";
+    $("wand-state").dataset.state = "OFFLINE";
   };
 }
 
@@ -716,6 +885,8 @@ function wireButtons() {
   $("record-start").addEventListener("click", () =>
     attempt(() => api("POST", "/api/recording/start", { label: $("train-label").value })));
   $("record-stop").addEventListener("click", () => attempt(() => api("POST", "/api/recording/stop")));
+  buildColors();
+  $("unknown-color").addEventListener("click", () => openColors($("unknown-color"), "UNKNOWN"));
   $("add-gesture").addEventListener("click", addGesture);
   $("new-gesture").addEventListener("keydown", (e) => { if (e.key === "Enter") addGesture(); });
   $("save-settings").addEventListener("click", () => attempt(async () => {
@@ -728,6 +899,7 @@ function wireButtons() {
   $("train-label").addEventListener("change", renderTrainCount);
   $("replay").addEventListener("click", replayTrail);
   new ResizeObserver(fitSpellName).observe($("verdict"));
+  new ResizeObserver(markTableOverflow).observe(document.querySelector(".table-scroll"));
   document.fonts.ready.then(fitSpellName);
 
   $("sim-buttons").replaceChildren(...state.meta.simulated_motions.map((motion) => {
@@ -743,6 +915,7 @@ async function start() {
   wireButtons();
   renderConfig();
   setSignals([], [[], [], []], [[], [], []]);
+  wireZoomButtons();
   drawTrail(null, null, "No casts yet. Hold the cast button and draw a gesture.");
   listen();
   await loadSamples();

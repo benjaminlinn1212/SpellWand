@@ -1,10 +1,11 @@
 /* SpellWand UI.
 
    Neutral greys in a light and a dark mode, with one theme colour, amber gold, kept for what
-   matters and for small details: the main button of each area, the reading on the gauge, a
-   thin line at the top of the page and under each heading, the chosen option. The motion
-   view is a dark stage in both modes, so the trail always glows like light painting. The last
-   cast's name sits on a block of the spell's own colour, the colour the wand's LED flashes.
+   matters and for small details: the main button of each area, the reading on the gauge, the
+   piece of rule under the title and under each heading, the chosen option, and whatever the
+   pointer is on: a control answers the pointer by lighting up. The motion view is a room of
+   graph paper, light or dark with the page, and the trail is drawn in the spell's colour. The
+   last cast's name sits on a block of that colour, the colour the wand's LED flashes.
    Corners are nearly square. Every area keeps its size: lists scroll inside their panel
    instead of growing. app.js reads the chart colours from the variables here. */
 
@@ -33,17 +34,22 @@
   --series-y: #eb6834;
   --series-z: #1baf7a;
 
-  /* the motion view: the same dark stage in both modes */
-  --stage: #0f0f13;
-  --stage-line: #26262e;
-  --stage-text: #a8a8b3;
-  --stage-light: #ffc857;   /* a trail whose spell is not known yet: the theme colour, as light */
+  /* the motion view: a room whose walls are ruled like graph paper */
+  --stage: #ffffff;
+  --stage-wall: #f1f1f5;    /* its three walls */
+  --stage-line: #c3c3ce;    /* the grid on them */
+  --stage-zero: #8a8a96;    /* the grid lines level with your hand */
+  --stage-text: #5b5b66;
+  --stage-light: #c48600;   /* a trail whose spell is not known yet: the theme colour, deep enough to show */
 
   /* the wand's STATUS_LED colours (firmware/lib/wand_core/wand_state.h) */
   --led-idle: #ffffff;
   --led-casting: #3d6bff;
   --led-inflight: #ff9600;
   --recording: #2f5bea;     /* the casting blue, deep enough for white text */
+
+  /* the arrow of a drop-down list */
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%2316161a' stroke-width='1.6'/%3E%3C/svg%3E");
 
   --font: "Archivo", "Helvetica Neue", Arial, sans-serif;
   --radius: 3px;
@@ -76,6 +82,15 @@
   --series-y: #d95926;
   --series-z: #199e70;
 
+  --stage: #0f0f13;
+  --stage-wall: #17171d;
+  --stage-line: #3b3b47;
+  --stage-zero: #6d6d7a;
+  --stage-text: #a8a8b3;
+  --stage-light: #ffc857;
+
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23f2f2f5' stroke-width='1.6'/%3E%3C/svg%3E");
+
   color-scheme: dark;
 }
 
@@ -102,26 +117,28 @@ body {
 .page {
   max-width: var(--page);
   margin: 0 auto;
-  padding: var(--gap) 24px 72px;
+  padding: var(--gap) 24px 40px;
 }
 
-h1, h2, p, figure, dl, dd, ol { margin: 0; }
-ol { padding: 0; list-style: none; }
+h1, h2, h3, p, figure, dl, dd, ol, ul { margin: 0; }
+ol, ul { padding: 0; list-style: none; }
 
+/* A heading sits on a rule that runs across its panel. The piece of the rule under the words
+   is in the theme colour, the way the chosen tab of a folder is marked. */
 h2 {
+  display: flex;
   margin-bottom: 14px;
+  border-bottom: 1px solid var(--line);
   font-size: 1.0625rem;
   font-weight: 700;
   line-height: 1.3;
 }
-h2::after {   /* a short line in the theme colour */
-  content: "";
-  display: block;
-  width: 24px;
-  height: 3px;
-  margin-top: 7px;
-  background: var(--brand);
+h2 > span {
+  margin-bottom: -1px;   /* onto the rule */
+  padding-bottom: 9px;
+  border-bottom: 2px solid var(--brand);
 }
+h3 { font-size: 0.9375rem; font-weight: 700; line-height: 1.3; }
 
 [hidden] { display: none !important; }
 
@@ -141,7 +158,14 @@ button, input, select {
   color: inherit;
 }
 
+/* A button answers the pointer by filling from its bottom edge: a main button (theme colour)
+   fills with ink, a quiet one (outlined) lights up in the theme colour. The fill is a
+   background layer that grows, so nothing moves and a click never waits for it. */
 button {
+  --base: var(--brand);      /* the button at rest */
+  --text: var(--on-brand);
+  --fill: var(--ink);        /* what rises through it under the pointer */
+  --on-fill: var(--surface);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -150,33 +174,78 @@ button {
   padding: 0 16px;
   border: 0;
   border-radius: var(--radius);
-  background: var(--brand);
-  color: var(--on-brand);
+  background: var(--base) linear-gradient(var(--fill), var(--fill)) no-repeat 0 100% / 100% 0;
+  color: var(--text);
   font-size: 0.9375rem;
   font-weight: 700;
   white-space: nowrap;
   cursor: pointer;
-  transition: background-color 0.12s, box-shadow 0.12s, transform 0.08s;
+  transition: background-size 0.14s ease-out, color 0.14s, box-shadow 0.14s, transform 0.08s;
 }
-button:hover { background: var(--brand-hover); }
 button:active:not(:disabled) { transform: translateY(1px) scale(0.98); }   /* it gives under the finger */
-button.quiet { background: transparent; color: var(--ink); font-weight: 600; box-shadow: inset 0 0 0 1px var(--line-strong); }
-button.quiet:hover { background: var(--tint); box-shadow: inset 0 0 0 1px var(--ink); }
-button.recording, button.recording:hover { background: var(--recording); color: #ffffff; }
+button.quiet {
+  --base: transparent;
+  --text: var(--ink);
+  --fill: var(--brand);
+  --on-fill: var(--on-brand);
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+button.recording { --base: var(--recording); --text: #ffffff; }
 button.recording::before {   /* a light that blinks while the wand records */
   content: "";
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #ffffff;
+  background: currentColor;
   animation: blink 0.7s ease-in-out infinite alternate;
 }
 @keyframes blink { to { opacity: 0.25; } }
-button.danger { padding: 0 8px; background: transparent; color: var(--bad); font-weight: 600; }
-button.danger:hover { background: transparent; text-decoration: underline; }
 button:disabled { opacity: 0.45; cursor: not-allowed; }
 
-button:focus-visible, input:focus-visible, select:focus-visible {
+/* A text button (View, Delete, Remove): words only. Under the pointer a line draws itself
+   beneath them, in the theme colour, or in red if the button removes something. */
+button.text {
+  --base: transparent;
+  --text: var(--ink);
+  --mark: var(--brand);
+  position: relative;
+  min-height: 32px;
+  padding: 0 2px;
+  background-image: none;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+button.text::after {
+  content: "";
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  bottom: 4px;
+  height: 2px;
+  background: var(--mark);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.14s ease-out;
+}
+button.text:focus-visible::after { transform: scaleX(1); }
+button.text.danger { --text: var(--ink-soft); --mark: var(--bad); }
+
+/* A colour square: press it to choose the colour (app.js sets --swatch). */
+.swatch-button {
+  --base: var(--swatch, var(--line));
+  flex: none;
+  width: 28px;
+  min-height: 28px;
+  padding: 0;
+  background-image: none;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 30%, transparent);
+}
+.swatch-button[aria-pressed="true"], .swatch-button[aria-expanded="true"] {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 30%, transparent), 0 0 0 2px var(--surface), 0 0 0 4px var(--ink);
+}
+
+button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
@@ -187,20 +256,41 @@ input, select {
   padding: 0 12px;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
-  background: var(--field);
-  transition: border-color 0.12s;
+  background-color: var(--field);
+  transition: border-color 0.12s, box-shadow 0.12s;
 }
-input:hover, select:hover { border-color: var(--ink); }
+input:focus, select:focus { border-color: var(--ink); box-shadow: inset 0 -2px 0 var(--brand); }
 input::placeholder { color: var(--ink-soft); opacity: 1; }
-input[type="color"] { width: 48px; padding: 3px; cursor: pointer; }
 input[type="number"] { width: 112px; }
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 34px;
+  background-image: var(--chevron);
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+/* What the pointer is on. Only where there is a pointer: on a touch screen a hover would stick. */
+@media (hover: hover) {
+  button:hover:not(:disabled) { background-size: 100% 100%; color: var(--on-fill); }
+  button.quiet:hover:not(:disabled) { box-shadow: inset 0 0 0 1px var(--brand); }
+  button.text:hover:not(:disabled) { color: var(--ink); }
+  button.text:hover:not(:disabled)::after { transform: scaleX(1); }
+  button.text.danger:hover:not(:disabled) { color: var(--bad); }
+  .swatch-button:hover:not(:disabled) {   /* a ring around the square */
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 30%, transparent), 0 0 0 2px var(--surface), 0 0 0 4px var(--ink);
+  }
+  input:hover, select:hover { border-color: var(--ink); box-shadow: inset 0 -2px 0 var(--brand); }
+}
 
 /* A field: its name above the control. */
 .field { display: grid; gap: 4px; }
 .field > span { font-size: 0.875rem; font-weight: 600; }
 .field.grow { flex: 1 1 160px; }
 .field.grow input, .field.grow select { width: 100%; }
-.field.inline { display: flex; align-items: center; gap: 12px; }
 
 .row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin-bottom: 12px; }
 .hint { max-width: 62ch; margin: 4px 0 12px; color: var(--ink-soft); font-size: 0.9375rem; }
@@ -220,7 +310,6 @@ input[type="number"] { width: 112px; }
   position: sticky;
   top: 0;
   z-index: 10;
-  border-top: 3px solid var(--brand);
   border-bottom: 1px solid var(--line);
   background: var(--surface);
 }
@@ -230,13 +319,22 @@ input[type="number"] { width: 112px; }
   align-items: center;
   gap: 12px 28px;
   max-width: var(--page);
+  min-height: 68px;
   margin: 0 auto;
-  padding: 10px 24px;
+  padding: 0 24px;
 }
+/* The app's name, the largest words on the page. It stands on the top bar's rule the way a
+   heading stands on its panel's: the piece of rule under it is in the theme colour. */
 .wordmark {
-  font-size: 1.375rem;
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  margin-bottom: -1px;
+  padding-top: 3px;
+  border-bottom: 3px solid var(--brand);
+  font-size: 1.875rem;
   font-weight: 800;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
   line-height: 1;
 }
 .status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; color: var(--ink-soft); font-size: 0.9375rem; }
@@ -244,6 +342,7 @@ input[type="number"] { width: 112px; }
 .masthead-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }
 
 /* Connection: hollow when off, filled when connected. */
+.link { color: var(--ink); }
 .dot {
   flex: none;
   width: 10px;
@@ -276,7 +375,7 @@ input[type="number"] { width: 112px; }
   border-radius: 50%;
   transition: background-color 0.15s;
 }
-.wand-state[data-state="OFFLINE"] { color: var(--ink-soft); }
+.wand-state[data-state="OFFLINE"] { display: none; }   /* no wand, no state to show */
 .wand-state[data-state="IDLE"]::before { background: var(--led-idle); }
 .wand-state[data-state="CASTING"]::before {
   --led: var(--led-casting);
@@ -304,16 +403,23 @@ input[type="number"] { width: 112px; }
   box-shadow: inset 0 0 0 1px var(--line-strong);
 }
 .theme-switch button {
+  --base: transparent;
+  --text: var(--ink-soft);
+  --fill: var(--line);
+  --on-fill: var(--ink);
   min-height: 34px;
   padding: 0 12px;
   border-radius: 2px;
-  background: transparent;
-  color: var(--ink-soft);
   font-size: 0.875rem;
   font-weight: 600;
 }
-.theme-switch button:hover { background: transparent; color: var(--ink); }
-.theme-switch button[aria-pressed="true"] { background: var(--brand); color: var(--on-brand); }
+.theme-switch button[aria-pressed="true"] {
+  --base: var(--brand);
+  --text: var(--on-brand);
+  --fill: var(--brand);
+  --on-fill: var(--on-brand);
+  cursor: default;
+}
 
 .sim {
   display: flex;
@@ -344,7 +450,7 @@ input[type="number"] { width: 112px; }
 .stage {
   position: relative;
   height: var(--stage-height);
-  border: 1px solid var(--stage-line);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--stage);
   overflow: hidden;
@@ -360,19 +466,24 @@ input[type="number"] { width: 112px; }
   pointer-events: none;
 }
 .stage-button {
+  --base: var(--stage);
+  --text: var(--ink);
+  --fill: var(--brand);
+  --on-fill: var(--on-brand);
   position: absolute;
   right: 14px;
   bottom: 12px;
   min-height: 36px;
   padding: 0 14px 0 12px;
-  background: rgba(255, 255, 255, 0.1);
-  color: #ffffff;
   font-size: 0.875rem;
   font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--line-strong);
 }
-.stage-button svg { color: var(--stage-light); }
-.stage-button:hover { background: rgba(255, 255, 255, 0.2); }
-.stage-button:focus-visible { outline-color: var(--stage-light); }
+.stage-button svg { color: var(--stage-light); transition: transform 0.2s ease-out, color 0.14s; }
+@media (hover: hover) {   /* the arrow leans back, ready to turn */
+  .stage-button:hover:not(:disabled) { box-shadow: inset 0 0 0 1px var(--brand); }
+  .stage-button:hover:not(:disabled) svg { color: currentColor; transform: rotate(-50deg); }
+}
 .stage-button.spin svg { animation: spin 0.5s ease-out 1; }   /* the arrow turns once when pressed */
 @keyframes spin { from { transform: rotate(0); } to { transform: rotate(-360deg); } }
 
@@ -503,24 +614,27 @@ td .swatch { margin-right: 4px; }
 
 /* The two sensor charts, across the whole width. */
 .signals { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gap); }
-.signal { padding: 16px 16px 8px; }
+.signal { position: relative; padding: 16px 16px 8px; }
+/* On a chart that is zoomed in: back to the whole cast. It sits beside the chart's name. */
+.zoom-out { position: absolute; top: 11px; right: 16px; min-height: 30px; padding: 0 10px; font-size: 0.8125rem; }
 .signal figcaption { font-size: 0.875rem; font-weight: 700; }
 .chart { height: 230px; }
 
 /* The dataset: as tall as training and settings beside it; its table scrolls inside the frame. */
 .dataset { display: flex; flex-direction: column; }
 .dataset > * { flex: none; }
-.panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
-.panel-head button { min-height: 36px; }
+/* The heading and its button share the rule under them. */
+.panel-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 14px; border-bottom: 1px solid var(--line); }
+.panel-head h2 { margin-bottom: 0; border-bottom: 0; }
+.panel-head button { min-height: 34px; margin-bottom: 8px; }
 .dataset .table-frame { position: relative; flex: 1 1 auto; min-height: 320px; }
 .table-scroll { position: absolute; inset: 0; overflow: auto; }
 
 .side { display: grid; gap: var(--gap); align-content: start; min-width: 0; }
 .train-notes { min-height: 3.4em; }   /* room for both notes, so they come and go without moving anything */
 .train-notes .hint { margin: 0 0 4px; }
-.save-row { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
 
-table { width: 100%; border-collapse: collapse; }
+table { width: 100%; border-collapse: separate; border-spacing: 0; }   /* separate, so a pinned cell keeps its line */
 th {
   position: sticky;
   top: 0;
@@ -535,44 +649,113 @@ th {
 }
 td { padding: 8px 12px 8px 0; border-bottom: 1px solid var(--line); vertical-align: middle; font-size: 0.9375rem; }
 th:last-child, td:last-child { padding-right: 0; }
-.samples tbody tr { transition: background-color 0.1s; }
-.samples tbody tr:hover { background: var(--bg); }
+.samples th:first-child, .samples td:first-child { padding-left: 12px; }
+.samples td:first-child { white-space: nowrap; }   /* the date and time stay on one line */
+.samples tbody tr { background: var(--surface); transition: background-color 0.1s; }
+.samples tbody td:first-child { transition: box-shadow 0.12s; }
+/* View and Delete stay in sight at the right edge when a narrow window makes the table scroll sideways. */
+.samples th:last-child, .samples td:last-child { position: sticky; right: 0; padding-left: 12px; }
+.samples th:last-child { z-index: 2; }
+.samples td:last-child { background: inherit; }
+.overflowing .samples td:last-child { box-shadow: inset 1px 0 0 var(--line); }   /* app.js marks a table that scrolls sideways */
+.overflowing .samples th:last-child { box-shadow: inset 1px 0 0 var(--line), inset 0 -1px 0 var(--line-strong); }
+@media (hover: hover) {   /* the row under the pointer: a shade, and a mark in the theme colour at its start */
+  .samples tbody tr:hover { background: var(--bg); }
+  .samples tbody tr:hover td:first-child { box-shadow: inset 3px 0 0 var(--brand); }
+}
 .samples tbody tr.new { animation: row-flash 1.4s ease-out 1; }   /* a sample that was just recorded */
-@keyframes row-flash { from { background: var(--tint); } to { background: transparent; } }
+@keyframes row-flash { from { background: var(--tint); } }
 .num { text-align: right; }
 .samples .gesture { font-weight: 600; letter-spacing: 0.01em; white-space: nowrap; }
 .samples td.check-ok { color: var(--ink-soft); }
 .samples td.check-bad { color: var(--warn); font-weight: 600; }
 .samples .actions { white-space: nowrap; text-align: right; }
-.samples .actions button { min-height: 32px; padding: 0 10px; font-size: 0.875rem; }
-/* View is a small link with a line in the theme colour under it. */
-.samples .actions button.quiet {
-  box-shadow: none;
-  text-decoration: underline;
-  text-decoration-color: var(--brand);
-  text-decoration-thickness: 2px;
-  text-underline-offset: 4px;
-}
-.samples .actions button.quiet:hover { background: var(--tint); box-shadow: none; }
+.samples .actions button + button { margin-left: 14px; }
 
-/* Each gesture in the settings is a block: its name, colour and Remove on one line, what it
-   does when cast below. */
-.gestures { margin: 8px 0 16px; }
-.gestures thead { display: none; }
-.gestures tr {
+/* ---------- settings ---------- */
+
+/* One setting: its name and what it means on the left, its value on the right. */
+.setting { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 20px; align-items: start; }
+.setting label { align-self: end; font-size: 0.9375rem; font-weight: 700; }
+.setting input { grid-column: 2; grid-row: 1 / span 2; width: 96px; }
+.setting .hint { grid-column: 1; margin: 0; font-size: 0.875rem; }
+
+.settings h3 { margin-top: 24px; }
+.settings h3 + .hint { margin: 2px 0 12px; font-size: 0.875rem; }
+
+/* Each gesture is one block on a two-column grid: its colour square, then everything else in
+   line with its name: the name and Remove, and under them what the Mac does when it is cast. */
+.gestures { border-top: 1px solid var(--line); }
+.gesture-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
   gap: 8px 12px;
   align-items: center;
   padding: 12px 0;
   border-bottom: 1px solid var(--line);
 }
-.gestures tr:first-child { border-top: 1px solid var(--line); }
-.gestures td { padding: 0; border: 0; }
-.gestures td:first-child { font-weight: 600; letter-spacing: 0.01em; overflow-wrap: anywhere; }
-.gestures td:nth-child(3) { grid-column: 1 / -1; grid-row: 2; }
-.action-cell { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 8px; }
-.action-cell select, .action-cell input { width: 100%; }
+.gesture-item.new { animation: row-flash 1.4s ease-out 1; }   /* a gesture that was just added */
+.gesture-name { font-weight: 700; letter-spacing: 0.01em; overflow-wrap: anywhere; }
+.gesture-item .action-cell, .gesture-note { grid-column: 2 / -1; }
+.gesture-note { margin-top: -6px; color: var(--ink-soft); font-size: 0.875rem; }
+.action-cell { display: grid; grid-template-columns: 168px minmax(0, 1fr); gap: 8px; }
+.action-cell select, .action-cell input { width: 100%; min-height: 36px; font-size: 0.9375rem; }
+
+.add-row { margin: 16px 0 0; }
+.save-row { margin-top: 20px; }
+.save-row button { width: 100%; }
+
+/* The colour chooser that opens under a colour square. */
+.color-pop {
+  position: absolute;
+  z-index: 30;
+  width: 242px;
+  padding: 14px 16px 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+  animation: pop-in 0.12s ease-out 1;
+}
+@keyframes pop-in { from { opacity: 0; transform: translateY(-4px); } }
+.color-title { margin-bottom: 12px; font-size: 0.875rem; font-weight: 700; }
+.color-presets { display: grid; grid-template-columns: repeat(6, 28px); gap: 8px; }
+.color-hex {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.color-hex input { flex: 1 1 auto; min-width: 0; min-height: 34px; font-size: 0.9375rem; font-weight: 400; }
+
+/* ---------- footer: what this is and who made it ---------- */
+
+.colophon { border-top: 1px solid var(--line); }
+.colophon-inner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 28px;
+  max-width: var(--page);
+  margin: 0 auto;
+  padding: 18px 24px 28px;
+  color: var(--ink-soft);
+  font-size: 0.8125rem;
+}
+.colophon p:first-child { margin-right: auto; }
+.colophon a {
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: underline 1px var(--line-strong);
+  text-underline-offset: 4px;
+  transition: text-decoration-color 0.14s;
+}
+@media (hover: hover) {
+  .colophon a:hover { text-decoration-color: var(--brand); text-decoration-thickness: 2px; }
+}
 
 /* ---------- toast ---------- */
 
@@ -600,9 +783,11 @@ th:last-child, td:last-child { padding-right: 0; }
 
 @media (max-width: 1000px) {
   .masthead { position: static; }
-  .masthead-inner { gap: 10px 16px; padding: 12px 16px; }
+  .masthead-inner { gap: 10px 16px; min-height: 0; padding: 12px 16px; }
+  .wordmark { align-self: center; margin-bottom: 0; padding-top: 0; border-bottom: 0; font-size: 1.75rem; }
   .masthead-actions { margin-left: 0; }
-  .page { padding: var(--gap) 16px 56px; }
+  .page { padding: var(--gap) 16px 32px; }
+  .colophon-inner { padding: 16px 16px 24px; }
   .grid { grid-template-columns: minmax(0, 1fr); }
   .stage { height: 360px; }
   .result { height: auto; }
@@ -615,6 +800,10 @@ th:last-child, td:last-child { padding-right: 0; }
 @media (max-width: 620px) {
   .signals { grid-template-columns: minmax(0, 1fr); }
   .panel { padding: 16px; }
+  .gesture-item .action-cell { grid-column: 1 / -1; }
+  .setting label { align-self: center; }
+  .setting input { grid-row: 1; }
+  .setting .hint { grid-column: 1 / -1; margin-top: 4px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
