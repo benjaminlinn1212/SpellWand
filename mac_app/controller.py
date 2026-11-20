@@ -8,6 +8,7 @@ The SpellWand UI (app.py) calls its methods and listens to the events it publish
   result        a GestureResult, with the motion for display
   action        what the Action Dispatcher did
   sample_saved  a training recording was saved
+  home          a device in the simulated home was switched, and the state of all of them
   message       something the user should know (e.g. a recording was too short)
 """
 
@@ -27,12 +28,14 @@ import numpy as np
 from action_dispatcher import ActionDispatcher, show_mac_notification
 from classifier import MIN_SAMPLES, GestureClassifier, leave_one_out
 from config import CONFIG_PATH, load_config, save_config
+from home import Home, describe
 from motion_trace import LiveTipTrace, tip_trace
 from protocol import (
     CastEnd, CastStart, MotionSample, ProtocolError, END_MAX_DURATION, SOURCE_RECORDING,
     decode_event, encode_gesture_result, encode_start_recording, encode_stop_recording,
 )
-from recorder import DATA_DIR, delete_sample, list_samples, load_dataset, load_sample, save_sample, sequence_from_samples
+from recorder import (DATA_DIR, delete_sample, list_samples, load_dataset, load_sample, move_all_samples, save_sample,
+                      sequence_from_samples)
 from simulator import GESTURES, SimulatedWand
 
 MOTION_BATCH = 5  # live motion goes to the UI in batches of this many samples
@@ -60,7 +63,8 @@ class SpellWandController:
         self.cast_log_path = Path(config_path).with_name("cast_log.csv")  # beside the settings, not among the samples
         self.config = load_config(config_path)
         self.classifier = GestureClassifier(self.config["dtw_threshold"])
-        self.dispatcher = ActionDispatcher(notifier=notifier)
+        self.home = Home()
+        self.dispatcher = ActionDispatcher(notifier=notifier, home=self._switch_home)
         self._background = run_in_background
         self._simulator_realtime = simulator_realtime
         self._simulator_seed = simulator_seed
@@ -158,6 +162,20 @@ class SpellWandController:
         self._retrain()
         self._publish_status()
 
+    def clear_dataset(self):
+        """Start training from nothing. Every sample moves to cleared/<date>-<time>/ beside the
+        data folder rather than being deleted, so a dataset cleared by mistake can be put back
+        by moving the files into the data folder again. Returns how many moved, and where."""
+        cleared = Path(self.data_dir).parent / "cleared"
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        folder, n = cleared / stamp, 2
+        while folder.exists():  # cleared twice within a second
+            folder, n = cleared / f"{stamp}-{n}", n + 1
+        moved = move_all_samples(self.data_dir, folder)
+        self._retrain()
+        self._publish_status()
+        return {"moved": moved, "folder": str(folder.relative_to(Path(self.data_dir).parent))}
+
     def check_dataset(self):
         """Compare every saved sample with all the others (see classifier.leave_one_out)."""
         infos = list_samples(self.data_dir)
@@ -183,6 +201,22 @@ class SpellWandController:
         self._retrain()
         self._publish_status()
         return copy.deepcopy(saved)
+
+    # ---------- the simulated home ----------
+
+    def home_state(self):
+        return self.home.state()
+
+    def toggle_home(self, device, by=None):
+        """Switch a device in the simulated home. `by` is the gesture that did it, or None
+        when it was switched from the page. Raises ValueError for an unknown device."""
+        self.home.toggle(device)
+        devices = self.home.state()
+        self._publish("home", {"devices": devices, "changed": device, "by": by})
+        return devices
+
+    def _switch_home(self, device, label):
+        return describe(device, self.toggle_home(device, by=label)[device])
 
     # ---------- status and events for the UI ----------
 

@@ -94,6 +94,12 @@ class AppTest(unittest.TestCase):
         self.assertEqual(len(checks), 12)
         self.assertEqual({c["label"] for c in checks}, set(GESTURES))
 
+    def test_clear_dataset(self):
+        response = self.post("/api/dataset/clear")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["moved"], 12)
+        self.assertEqual(self.client.get("/api/samples").get_json(), [])
+
     def test_settings_round_trip(self):
         config = self.client.get("/api/config").get_json()
         config["dtw_threshold"] = 0.8
@@ -112,6 +118,51 @@ class AppTest(unittest.TestCase):
         self.assertIn("webhook", meta["action_types"])
         self.assertNotIn("wand_led", meta["action_types"])
         self.assertEqual(meta["simulated_motions"][:3], list(GESTURES))
+
+    def test_the_old_living_room_address_is_gone(self):
+        self.assertEqual(self.client.get("/home").status_code, 404)
+
+    def test_home_page_loads(self):
+        response = self.client.get("/living-room")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Living room", response.data)
+
+    def test_pages_arrive_with_the_current_connection_in_the_top_bar(self):
+        # so the top bar does not change as the page opens, or between the two pages
+        for url in ("/", "/living-room"):
+            html = self.client.get(url).get_data(as_text=True)
+            self.assertIn('<span id="link-text">Simulated wand connected</span>', html)
+            self.assertRegex(html, r'id="wand-state"[^>]*data-state="IDLE"[^>]*>IDLE</span>')
+            self.assertIn('<button id="connect-ble" type="button" hidden>', html)
+            self.assertIn('<button id="disconnect" type="button" class="quiet">', html)
+        for url in ("/", "/living-room"):   # the simulated wand's motions, ready to press, on both pages
+            html = self.client.get(url).get_data(as_text=True)
+            self.assertIn('<body class="has-sim">', html)
+            self.assertIn('<div id="sim-panel" class="sim-dock" role="toolbar"', html)
+            self.assertRegex(html, r'data-motion="CIRCLE" title="Draw a circle"[^>]*>\s*<svg[^>]*>.*?</svg>\s*<span class="sim-name">Circle</span>')
+            self.assertRegex(html, r'data-motion="STILL" title="Hold it still[^"]*"[^>]*>\s*<svg[^>]*>.*?</svg>\s*<span class="sim-name">Still</span>')
+        self.post("/api/disconnect")
+        html = self.client.get("/").get_data(as_text=True)
+        self.assertIn('<span id="link-text">No wand connected</span>', html)
+        self.assertIn('<button id="disconnect" type="button" class="quiet" hidden>', html)
+        self.assertIn('<body>', html)
+        self.assertRegex(html, r'<div id="sim-panel" class="sim-dock" role="toolbar"[^>]* hidden>')
+
+    def test_living_room_arrives_drawn_as_it_is(self):
+        self.post("/api/home", {"device": "lamp"})
+        html = self.client.get("/living-room").get_data(as_text=True)
+        self.assertIn('<svg id="room" class="lamp-on"', html)
+
+    def test_home_devices_through_the_api(self):
+        self.assertEqual(self.client.get("/api/home").get_json(),
+                         {"devices": {"lamp": False, "door": False, "tv": False, "curtains": False}})
+        response = self.post("/api/home", {"device": "curtains"})
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.get_json()["devices"]["curtains"])
+        self.assertEqual(self.post("/api/home", {"device": "toaster"}).status_code, 400)
+        meta = self.client.get("/api/meta").get_json()
+        self.assertIn("home", meta["action_types"])
+        self.assertEqual([d["device"] for d in meta["home_devices"]], ["door", "curtains", "tv", "lamp"])
 
     def test_form_posts_from_other_websites_are_refused(self):
         response = self.client.post("/api/disconnect", data={"x": "1"})

@@ -28,6 +28,20 @@ from protocol import (
 
 GESTURES = ("CIRCLE", "ZIGZAG", "HORIZONTAL_LINE")
 OTHER_MOTIONS = ("WOBBLE", "STILL")  # things a simulated user can do that are not gestures
+MOTION_LABELS = {  # what the simulated wand's buttons say
+    "CIRCLE": "Draw a circle",
+    "ZIGZAG": "Draw a zigzag",
+    "HORIZONTAL_LINE": "Draw a horizontal line",
+    "WOBBLE": "Wave it around",
+    "STILL": "Hold it still",
+}
+MOTION_NAMES = {  # the same, short, as the simulated wand's toolbar shows them
+    "CIRCLE": "Circle",
+    "ZIGZAG": "Zigzag",
+    "HORIZONTAL_LINE": "Line",
+    "WOBBLE": "Wave",
+    "STILL": "Still",
+}
 SAMPLE_RATE_HZ = 100
 WAND_LENGTH_M = 0.3
 GRAVITY = 9.81

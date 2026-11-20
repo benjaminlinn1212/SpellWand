@@ -4,6 +4,7 @@ Never runs anything for UNKNOWN. Action types:
   none      do nothing
   notify    show a macOS notification
   webhook   POST {"gesture": ..., "source": "SpellWand"} to a URL, e.g. a Home Assistant webhook
+  home      switch a device in the simulated living room (home.py)
 """
 
 import json
@@ -36,9 +37,12 @@ def show_mac_notification(message, runner=subprocess.run):
 
 
 class ActionDispatcher:
-    def __init__(self, notifier=show_mac_notification, http_timeout_s=3.0):
+    def __init__(self, notifier=show_mac_notification, http_timeout_s=3.0, home=None):
+        """home(device, label) switches a device in the simulated home and describes its new
+        state; the controller provides it."""
         self._notify = notifier
         self._http_timeout_s = http_timeout_s
+        self._home = home
 
     def dispatch(self, label, action):
         """Run the action for `label`. Returns an ActionOutcome, or None if nothing ran."""
@@ -51,6 +55,11 @@ class ActionDispatcher:
                 detail = "notification shown" if ok else "osascript failed"
             elif kind == "webhook":
                 ok, detail = self._webhook(action["url"], label)
+            elif kind == "home":
+                if self._home is None:
+                    ok, detail = False, "no simulated home"
+                else:
+                    ok, detail = True, self._home(action["device"], label)
             else:
                 ok, detail = False, f"unknown action type {kind!r}"
         except Exception as error:  # an action must never take the app down

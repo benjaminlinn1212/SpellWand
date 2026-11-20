@@ -86,6 +86,17 @@ def delete_sample(sample_id, data_dir=DATA_DIR):
     _sample_path(sample_id, data_dir).unlink()
 
 
+def move_all_samples(data_dir, destination):
+    """Move every saved sample into `destination` (created if needed). Returns how many moved."""
+    destination = Path(destination)
+    destination.mkdir(parents=True, exist_ok=True)
+    ids = _sample_ids(data_dir)
+    for sample_id in ids:
+        path = _sample_path(sample_id, data_dir)
+        path.rename(destination / path.name)
+    return len(ids)
+
+
 def _sample_ids(data_dir):
     paths = sorted(Path(data_dir).glob("*.csv"))
     return [p.stem for p in paths if SAMPLE_ID_PATTERN.fullmatch(p.stem)]

@@ -1,0 +1,124 @@
+<!doctype html>
+{% set page = "living-room" %}
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Living room | Grimoire</title>
+<script>
+  // Choose the theme before the page paints: the saved choice, or else the system's.
+  (function () {
+    var saved = null;
+    try { saved = localStorage.getItem("spellwand-theme"); } catch (error) { /* private window */ }
+    var dark = saved ? saved === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
+  })();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400..800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='home.css') }}">
+<script src="{{ url_for('static', filename='shared.js') }}" defer></script>
+<script src="{{ url_for('static', filename='home.js') }}" defer></script>
+</head>
+<body{% if status.mode == "simulated" %} class="has-sim"{% endif %}>
+
+{% include "_header.html" %}
+{% include "_sim.html" %}
+
+<main class="home">
+  <h1 class="visually-hidden">Living room</h1>
+
+  <!-- The room is drawn in lines. Each device is a group that app state switches through a
+       class on the svg: lamp-on, door-on (open), tv-on, curtains-on (open). -->
+  <figure class="room">
+    <svg id="room" class="{% for device, on in home.items() if on %}{{ device }}-on{% if not loop.last %} {% endif %}{% endfor %}" viewBox="0 0 1200 540" role="img" aria-label="The living room: a door, a window with curtains, a TV and a floor lamp">
+      <defs>
+        <radialGradient id="lamp-glow">
+          <stop offset="0" class="glow-stop" stop-opacity="0.55"/>
+          <stop offset="0.45" class="glow-stop" stop-opacity="0.16"/>
+          <stop offset="1" class="glow-stop" stop-opacity="0"/>
+        </radialGradient>
+        <linearGradient id="lamp-cone" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" class="glow-stop" stop-opacity="0.32"/>
+          <stop offset="1" class="glow-stop" stop-opacity="0"/>
+        </linearGradient>
+        <linearGradient id="tv-picture" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#4f7cff"/>
+          <stop offset="0.55" stop-color="#8a5cff"/>
+          <stop offset="1" stop-color="#ff7a59"/>
+        </linearGradient>
+        <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur stdDeviation="26"/>
+        </filter>
+      </defs>
+
+      <!-- light from the lamp, behind everything -->
+      <circle class="lamp-glow" cx="1110" cy="215" r="300" fill="url(#lamp-glow)"/>
+
+      <!-- door, hinged on the left -->
+      <g class="device-art" data-device="door">
+        <rect class="door-opening" x="82" y="162" width="176" height="318"/>
+        <g class="door-panel">
+          <rect class="ln solid" x="86" y="166" width="168" height="314"/>
+          <rect class="ln fine" x="108" y="192" width="124" height="110"/>
+          <rect class="ln fine" x="108" y="324" width="124" height="128"/>
+          <circle class="knob" cx="234" cy="330" r="6"/>
+        </g>
+        <path class="ln" d="M80 480 V160 H260 V480"/>
+      </g>
+
+      <!-- window with curtains -->
+      <g class="device-art" data-device="curtains">
+        <rect class="sky" x="360" y="150" width="260" height="220"/>
+        <circle class="sun" cx="566" cy="200" r="20"/>
+        <rect class="ln" x="360" y="150" width="260" height="220"/>
+        <path class="ln" d="M490 150 V370 M360 260 H620"/>
+        <rect class="ln solid" x="344" y="370" width="292" height="10"/>
+        <g class="curtain curtain-left">
+          <rect class="ln cloth" x="330" y="130" width="170" height="270"/>
+          <path class="ln fine" d="M372 134 V396 M415 134 V396 M458 134 V396"/>
+        </g>
+        <g class="curtain curtain-right">
+          <rect class="ln cloth" x="490" y="130" width="170" height="270"/>
+          <path class="ln fine" d="M532 134 V396 M575 134 V396 M618 134 V396"/>
+        </g>
+        <path class="ln" d="M316 128 H674"/>
+        <circle class="knob" cx="316" cy="128" r="5"/>
+        <circle class="knob" cx="674" cy="128" r="5"/>
+      </g>
+
+      <!-- TV on a low cabinet -->
+      <g class="device-art" data-device="tv">
+        <rect class="tv-glow" x="715" y="215" width="290" height="190" fill="url(#tv-picture)" filter="url(#soft)"/>
+        <rect class="ln solid" x="700" y="420" width="320" height="60"/>
+        <path class="ln fine" d="M860 420 V480 M830 450 H848 M872 450 H890"/>
+        <path class="ln" d="M860 398 V412 M835 414 H885"/>
+        <rect class="ln tv-body" x="726" y="232" width="268" height="166" rx="4"/>
+        <rect class="screen" x="738" y="244" width="244" height="142"/>
+        <rect class="picture" x="738" y="244" width="244" height="142" fill="url(#tv-picture)"/>
+      </g>
+
+      <!-- floor lamp -->
+      <g class="device-art" data-device="lamp">
+        <polygon class="lamp-cone" points="1078,240 1142,240 1200,480 1020,480" fill="url(#lamp-cone)"/>
+        <path class="ln" d="M1110 240 V474"/>
+        <path class="ln thick" d="M1086 477 H1134"/>
+        <path class="ln shade" d="M1070 240 H1150 L1130 172 H1090 Z"/>
+      </g>
+
+      <!-- the floor -->
+      <path class="ln" d="M0 480 H1200"/>
+    </svg>
+  </figure>
+
+  <p id="home-caption" class="home-caption" aria-live="polite">Cast a gesture to switch something in the room.</p>
+
+  <ul id="devices" class="devices" aria-label="Devices"></ul>
+</main>
+
+{% include "_footer.html" %}
+</body>
+</html>

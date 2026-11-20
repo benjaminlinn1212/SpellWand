@@ -88,6 +88,39 @@ class ControllerTest(unittest.TestCase):
         self.assertTrue(action["ok"], action["detail"])
         self.assertEqual(self.notifications, ["Circle cast!"])
 
+    def use_home_action(self, label, device):
+        config = self.app.get_config()
+        config["gestures"][label]["action"] = {"type": "home", "device": device}
+        self.app.update_config(config)
+        self.published("home")  # forget anything published so far
+
+    def test_a_cast_mapped_to_a_home_device_switches_it_and_tells_the_pages(self):
+        self.use_home_action("CIRCLE", "lamp")
+        self.wand.cast("CIRCLE")
+        [change] = self.published("home")
+        self.assertEqual(change, {"devices": {"lamp": True, "door": False, "tv": False, "curtains": False},
+                                  "changed": "lamp", "by": "CIRCLE"})
+        self.assertTrue(self.app.home_state()["lamp"])
+
+    def test_casting_again_switches_it_back(self):
+        self.use_home_action("ZIGZAG", "door")
+        self.wand.cast("ZIGZAG")
+        self.wand.cast("ZIGZAG")
+        self.assertFalse(self.app.home_state()["door"])
+
+    def test_casual_movement_changes_nothing_in_the_home(self):
+        self.use_home_action("CIRCLE", "lamp")
+        self.wand.cast("WOBBLE")
+        self.assertEqual(self.published("home"), [])
+        self.assertFalse(any(self.app.home_state().values()))
+
+    def test_home_devices_can_be_switched_from_the_page(self):
+        self.assertEqual(self.app.toggle_home("tv")["tv"], True)
+        [change] = self.published("home")
+        self.assertEqual((change["changed"], change["by"]), ("tv", None))
+        with self.assertRaises(ValueError):
+            self.app.toggle_home("toaster")
+
     def test_result_includes_the_motion_for_the_ui(self):
         self.wand.cast("ZIGZAG")
         [result] = self.published("result")
@@ -190,6 +223,28 @@ class ControllerTest(unittest.TestCase):
         self.wand.cast("CIRCLE")
         [result] = self.published("result")
         self.assertNotEqual(result["nearest_label"], "CIRCLE")
+
+    def test_clearing_the_dataset_moves_every_sample_aside_and_forgets_the_gestures(self):
+        before = sorted(p.name for p in self.data_dir.glob("*.csv"))
+        cleared = self.app.clear_dataset()
+        self.assertEqual(cleared["moved"], len(before))
+        self.assertEqual(list_samples(self.data_dir), [])
+        self.assertEqual(self.app.status()["dataset"], {})
+        # nothing is lost: the files are in a dated folder beside the data folder
+        folder = self.data_dir.parent / cleared["folder"]
+        self.assertEqual(folder.parent, self.data_dir.parent / "cleared")
+        self.assertEqual(sorted(p.name for p in folder.glob("*.csv")), before)
+        self.wand.cast("CIRCLE")
+        [result] = self.published("result")
+        self.assertEqual(result["label"], "UNKNOWN")
+
+    def test_clearing_twice_in_a_row_keeps_both_sets(self):
+        first = self.app.clear_dataset()
+        self.app.start_recording("CIRCLE")
+        self.app.stop_recording()
+        second = self.app.clear_dataset()
+        self.assertEqual(second["moved"], 1)
+        self.assertNotEqual(first["folder"], second["folder"])
 
     def test_dataset_check_reports_every_sample(self):
         checks = self.app.check_dataset()

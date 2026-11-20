@@ -1,0 +1,125 @@
+/* The Living room page: a room drawn in plain lines on the page's own background. Colour
+   appears only where something gives light: the lamp, the TV, the sky through the window.
+   Builds on style.css (colours, header, buttons, footer). */
+
+:root {
+  --room-ink: var(--ink);
+  --room-fine: color-mix(in srgb, var(--ink) 35%, transparent);
+  --sky: #d9e6f3;
+  --sun: #ffcf5a;
+  --cloth: #e9e5dd;
+  --opening: #dcdce2;
+  --screen-off: #232329;
+  --glow: #ffc247;
+  --shade-on: #ffd98a;
+}
+:root[data-theme="dark"] {
+  --sky: #1c2335;
+  --sun: #e6e6ee;          /* the moon */
+  --cloth: #2c2a30;
+  --opening: #050507;
+  --screen-off: #050507;
+  --glow: #ffb938;
+  --shade-on: #ffcb6b;
+}
+
+.home {
+  max-width: 1120px;
+  min-height: calc(100vh - 70px);   /* the room fills the window under the top bar, so the footer
+                                       starts below it, not under the simulated wand's toolbar */
+  margin: 0 auto;
+  padding: 40px 24px 48px;
+}
+
+/* ---------- the room ---------- */
+
+.room svg { display: block; width: 100%; height: auto; overflow: visible; }
+
+.ln { fill: none; stroke: var(--room-ink); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.ln.fine { stroke: var(--room-fine); stroke-width: 1.5; }
+.ln.thick { stroke-width: 6; }
+.ln.solid { fill: var(--bg); }
+.knob { fill: var(--room-ink); }
+.glow-stop { stop-color: var(--glow); }
+
+/* door: the panel turns on its hinge (left edge) and shows the dark hall behind */
+.door-opening { fill: var(--opening); }
+.door-panel { transform-origin: 86px 0; transition: transform 0.7s cubic-bezier(0.3, 0.7, 0.2, 1); }
+.door-on .door-panel { transform: scaleX(0.1); }
+
+/* window: the curtains gather at the sides */
+.sky { fill: var(--sky); }
+.sun { fill: var(--sun); }
+.ln.cloth { fill: var(--cloth); }
+.curtain { transition: transform 0.9s cubic-bezier(0.3, 0.7, 0.2, 1); }
+.curtain-left { transform-origin: 330px 0; }
+.curtain-right { transform-origin: 660px 0; }
+.curtains-on .curtain { transform: scaleX(0.26); }
+
+/* TV: the picture and its glow fade in */
+.tv-body { fill: var(--bg); }
+.screen { fill: var(--screen-off); }
+.picture, .tv-glow { opacity: 0; transition: opacity 0.35s ease-out; }
+.tv-on .picture { opacity: 1; }
+.tv-on .tv-glow { opacity: 0.45; }
+
+/* lamp: the shade lights up, light falls to the floor and spreads around it */
+.shade { fill: var(--bg); transition: fill 0.3s; }
+.lamp-glow, .lamp-cone { opacity: 0; transition: opacity 0.6s ease-out; }
+.lamp-on .shade { fill: var(--shade-on); }
+.lamp-on .lamp-glow, .lamp-on .lamp-cone { opacity: 1; }
+
+/* Every device in the drawing can be pressed too; under the pointer its lines turn amber. */
+.device-art { cursor: pointer; }
+.still, .still * { transition: none !important; }   /* home.js: the room as it is when the page opens */
+@media (hover: hover) {
+  .device-art:hover { --room-ink: var(--brand-hover); --room-fine: var(--brand); }
+}
+
+/* ---------- what happened, and the four devices ---------- */
+
+.home-caption {
+  min-height: 1.5em;   /* stays the same height when the words change */
+  margin: 28px 0 18px;
+  color: var(--ink-soft);
+  font-size: 1.0625rem;
+}
+.home-caption.fresh { color: var(--ink); }
+
+.devices {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0 24px;
+}
+/* A device: a rule above it, its name, its state, and the gesture that switches it. The rule
+   turns amber, the way a heading's does, while the device is on or open. */
+.device {
+  --base: transparent;
+  --text: var(--ink);
+  --fill: var(--tint);
+  --on-fill: var(--ink);
+  display: grid;
+  justify-content: start;
+  justify-items: start;
+  gap: 2px;
+  width: 100%;
+  min-height: 0;
+  padding: 14px 0 12px;
+  border-radius: 0;
+  box-shadow: inset 0 1px 0 var(--line-strong);
+  text-align: left;
+  font-weight: 400;
+}
+.device[aria-pressed="true"] { box-shadow: inset 0 3px 0 var(--brand); }
+.device-name { font-size: 0.875rem; font-weight: 600; color: var(--ink-soft); }
+.device-state { font-size: 1.625rem; font-weight: 700; letter-spacing: -0.01em; line-height: 1.2; color: var(--ink-soft); }
+.device[aria-pressed="true"] .device-state { color: var(--ink); }
+.device-gesture { display: flex; align-items: center; gap: 6px; margin-top: 6px; color: var(--ink-soft); font-size: 0.8125rem; }
+.device-gesture .swatch { width: 9px; height: 9px; }
+.device.changed .device-state { animation: state-in 0.4s ease-out 1; }
+@keyframes state-in { from { transform: translateY(6px); opacity: 0; } }
+
+@media (max-width: 720px) {
+  .home { padding: 24px 16px 32px; }
+  .devices { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; }
+}

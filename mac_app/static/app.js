@@ -8,13 +8,6 @@ const LED_COLORS = [
 ];
 const AXES = ["x (along wand)", "y (left)", "z (up)"];
 const CHART_FONT = "Archivo, 'Helvetica Neue', Arial, sans-serif";
-const MOTION_NAMES = {
-  CIRCLE: "Draw a circle",
-  ZIGZAG: "Draw a zigzag",
-  HORIZONTAL_LINE: "Draw a horizontal line",
-  WOBBLE: "Wave it around",
-  STILL: "Hold it still",
-};
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 // A double-click on a zoomed chart zooms back out. Plotly's own limit of 0.3 s between the two
 // presses is shorter than an ordinary double-click, so it is raised to the Mac's usual 0.5 s.
@@ -115,13 +108,8 @@ function el(tag, props = {}, children = []) {
   return node;
 }
 
-let toastTimer = null;
 function toast(text, isError = false) {
-  const box = $("toast");
-  box.textContent = text;
-  box.className = "toast show" + (isError ? " error" : "");
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => (box.className = "toast"), isError ? 6000 : 3500);
+  Shared.toast(text, isError);  // the message box is shared with the Living room page (shared.js)
 }
 
 async function attempt(action) {
@@ -264,7 +252,10 @@ function trailLayout(box, step) {
     scene: {
       aspectmode: "manual",
       aspectratio: { x: sizes[0] / largest, y: sizes[1] / largest, z: sizes[2] / largest },
-      camera: { eye: { x: -1.5, y: 0, z: 0.3 }, up: { x: 0, y: 0, z: 1 } },  // from behind your hand
+      // From behind your hand, turned very slightly to one side. Looking exactly along the
+      // forward axis left Plotly two equally good edges for the axis names, and it switched
+      // between them from frame to frame, so the names flashed.
+      camera: { eye: { x: -1.5, y: -0.06, z: 0.3 }, up: { x: 0, y: 0, z: 1 } },
       xaxis: axis("forward", box[0]),
       yaxis: axis("left", box[1]),
       zaxis: axis("up", box[2]),
@@ -384,19 +375,30 @@ function showStage() {
   });
 }
 
+// How fast scrolling zooms the motion view, as a multiple of Plotly's own speed, which takes
+// a lot of scrolling. Plotly has no public setting for it, so the speed is set on the 3D
+// view's camera, an internal part of Plotly 2.35.2 (the version index.html loads). If a later
+// version has no such camera, nothing happens and the zoom keeps Plotly's speed.
+const TRAIL_ZOOM_SPEED = 4;
+function setTrailZoomSpeed() {
+  const camera = $("trail")._fullLayout?.scene?._scene?.camera;
+  if (camera) camera.zoomSpeed = TRAIL_ZOOM_SPEED;
+}
+
 // Draws what state.trail holds, in the current theme: all of it or only its first `count`
 // points, in its own box or in the one given.
 function paintTrail(count, box) {
   const trail = state.trail;
-  if (!trail.trace) {
+  let traces = null, shown = trail.box;
+  if (trail.trace) {
+    traces = trailTraces(trail.trace, trail.color, count ?? trail.trace.x.length);
+    shown = box ?? trail.box;
+  } else {
     // Just the hand, so the empty scene is still 3D (an empty plot would default to 2D).
-    const hand = { type: "scatter3d", mode: "markers", x: [0], y: [0], z: [0], hoverinfo: "skip",
-      marker: { size: 4, color: ink.stageText } };
-    Plotly.react("trail", [hand], trailLayout(trail.box, gridStep(null)), plotConfig);
-    return;
+    traces = [{ type: "scatter3d", mode: "markers", x: [0], y: [0], z: [0], hoverinfo: "skip",
+      marker: { size: 4, color: ink.stageText } }];
   }
-  const traces = trailTraces(trail.trace, trail.color, count ?? trail.trace.x.length);
-  Plotly.react("trail", traces, trailLayout(box ?? trail.box, gridStep(trail.trace)), plotConfig);
+  Plotly.react("trail", traces, trailLayout(shown, gridStep(trail.trace)), plotConfig).then(setTrailZoomSpeed);
 }
 
 // While a cast is going on, the trail grows as the tip positions arrive (in plain light: the
@@ -445,18 +447,7 @@ function endLiveTrail() {
 function renderStatus(status) {
   state.status = status;
   const connected = status.connected;
-  $("link-dot").className = "dot" + (connected ? " connected" : "");
-  $("link-text").textContent = !connected ? "No wand connected"
-    : status.mode === "simulated" ? "Simulated wand connected" : "Wand connected";
-  // The wand's own state shows only while a wand is connected (style.css hides OFFLINE).
-  const chip = $("wand-state");
-  chip.textContent = connected ? status.wand_state : "";
-  chip.dataset.state = connected ? status.wand_state : "OFFLINE";
-
-  $("connect-ble").hidden = connected;
-  $("connect-sim").hidden = connected;
-  $("disconnect").hidden = !connected;
-  $("sim-panel").hidden = status.mode !== "simulated";
+  Shared.showStatus(status);  // the top bar: connection, wand state, connect buttons (shared.js)
 
   const recording = status.recording;
   const idle = connected && status.wand_state === "IDLE" && !recording;
@@ -467,7 +458,6 @@ function renderStatus(status) {
   $("record-status").textContent = recording
     ? `Recording ${recording}. Perform the gesture, then press Stop and save.`
     : connected ? "" : "Connect the wand to record.";
-  for (const button of document.querySelectorAll("#sim-buttons button")) button.disabled = !idle;
 
   renderHistory(status.history);
   renderDatasetSummary(status.dataset);
@@ -682,6 +672,11 @@ function actionEditor(action) {
     } else if (kind === "webhook") {
       extra.replaceChildren(el("input", { type: "url", className: "action-url", placeholder: "https://…",
         value: action.url ?? "", "aria-label": "Web address" }));
+    } else if (kind === "home") {
+      const device = el("select", { className: "action-device", "aria-label": "Device in the living room" },
+        state.meta.home_devices.map((d) => el("option", { value: d.device }, d.name)));
+      device.value = action.device ?? state.meta.home_devices[0].device;
+      extra.replaceChildren(device);
     } else {
       extra.replaceChildren();
     }
@@ -728,6 +723,7 @@ function readConfigForm() {
     const action = { type };
     if (type === "notify") action.message = row.querySelector(".action-message").value;
     if (type === "webhook") action.url = row.querySelector(".action-url").value;
+    if (type === "home") action.device = row.querySelector(".action-device").value;
     gestures[row.dataset.label] = { color: row.querySelector(".gesture-color").value, action };
   }
   return {
@@ -804,7 +800,43 @@ function renderSamples() {
     ]);
   });
   $("sample-rows").replaceChildren(...rows);
+  $("clear-dataset").disabled = !state.samples.length;
   markTableOverflow();
+}
+
+function plural(n, word) {
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
+
+// Clear dataset asks first, in the panel itself. Nothing is deleted: app.py moves the files to
+// a dated folder in cleared/, beside the data folder, so they can be put back by hand.
+function askToClear() {
+  const count = plural(state.samples.length, "sample");
+  $("clear-question").textContent = `Clear all ${count}? Every gesture will need training again. `
+    + "The files are kept in the cleared folder, so they can be put back.";
+  $("clear-yes").textContent = `Clear ${count}`;
+  $("clear-confirm").hidden = false;
+  $("clear-no").focus();
+}
+
+function cancelClear() {
+  $("clear-confirm").hidden = true;
+  $("clear-dataset").focus();
+}
+
+async function clearDataset() {
+  $("clear-yes").disabled = true;
+  try {
+    const result = await api("POST", "/api/dataset/clear");
+    $("clear-confirm").hidden = true;
+    state.checks = {};
+    await loadSamples();
+    toast(`Cleared ${plural(result.moved, "sample")}. They are kept in ${result.folder}.`);
+  } catch (error) {
+    toast(error.message, true);
+  } finally {
+    $("clear-yes").disabled = false;
+  }
 }
 
 // A narrow window makes the table scroll sideways. Its last column (View, Delete) stays in
@@ -835,7 +867,20 @@ async function checkDataset() {
 
 // ---------- live events from app.py ----------
 
+// A browser keeps at most 6 connections open to app.py, and each page holds one for its live
+// updates. Chrome keeps a page you leave alive for a while (for the Back button), connection
+// and all, so a few quick switches between the Wand and Living room pages used up all 6 and
+// every page hung until one closed. So the connection closes the moment the page is left,
+// and opens again if the page comes back.
 function listen() {
+  let events = openEvents();
+  window.addEventListener("pagehide", () => events.close());
+  window.addEventListener("pageshow", (event) => {
+    if (event.persisted) events = openEvents();
+  });
+}
+
+function openEvents() {
   const events = new EventSource("/api/events");
   const on = (kind, handler) => events.addEventListener(kind, (e) => handler(JSON.parse(e.data)));
   on("status", renderStatus);
@@ -859,29 +904,13 @@ function listen() {
     setSignals(detail.t, detail.accel, detail.gyro);
   }));
   on("message", (data) => toast(data.text, data.level === "warning"));
-  events.onerror = () => {
-    $("link-dot").className = "dot";
-    $("link-text").textContent = "Lost contact with app.py. Is it still running?";
-    $("wand-state").dataset.state = "OFFLINE";
-  };
+  events.onerror = () => Shared.lostContact();
+  return events;
 }
 
 // ---------- buttons ----------
 
 function wireButtons() {
-  $("connect-ble").addEventListener("click", () => attempt(async () => {
-    $("connect-ble").disabled = true;
-    $("link-dot").className = "dot searching";
-    $("link-text").textContent = "Looking for the wand (up to 10 s)…";
-    try {
-      await api("POST", "/api/connect", { mode: "ble" });
-    } finally {
-      $("connect-ble").disabled = false;
-      if (state.status) renderStatus(state.status);
-    }
-  }));
-  $("connect-sim").addEventListener("click", () => attempt(() => api("POST", "/api/connect", { mode: "simulated" })));
-  $("disconnect").addEventListener("click", () => attempt(() => api("POST", "/api/disconnect")));
   $("record-start").addEventListener("click", () =>
     attempt(() => api("POST", "/api/recording/start", { label: $("train-label").value })));
   $("record-stop").addEventListener("click", () => attempt(() => api("POST", "/api/recording/stop")));
@@ -896,17 +925,17 @@ function wireButtons() {
     toast("Settings saved.");
   }));
   $("check-dataset").addEventListener("click", checkDataset);
+  $("clear-dataset").addEventListener("click", askToClear);
+  $("clear-no").addEventListener("click", cancelClear);
+  $("clear-yes").addEventListener("click", clearDataset);
+  $("clear-confirm").addEventListener("keydown", (event) => {
+    if (event.key === "Escape") cancelClear();
+  });
   $("train-label").addEventListener("change", renderTrainCount);
   $("replay").addEventListener("click", replayTrail);
   new ResizeObserver(fitSpellName).observe($("verdict"));
   new ResizeObserver(markTableOverflow).observe(document.querySelector(".table-scroll"));
   document.fonts.ready.then(fitSpellName);
-
-  $("sim-buttons").replaceChildren(...state.meta.simulated_motions.map((motion) => {
-    const button = el("button", { type: "button", className: "quiet" }, MOTION_NAMES[motion] ?? `Cast ${motion}`);
-    button.addEventListener("click", () => attempt(() => api("POST", "/api/simulate", { motion })));
-    return button;
-  }));
 }
 
 async function start() {

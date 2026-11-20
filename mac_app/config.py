@@ -11,12 +11,15 @@ import os
 import re
 from pathlib import Path
 
+from home import HOME_DEVICES
+
 CONFIG_PATH = Path(__file__).parent / "config.json"
 
 ACTION_TYPES = {
     "none": "Do nothing",
     "notify": "Show notification",       # macOS notification
     "webhook": "Send web request",       # e.g. a Home Assistant webhook
+    "home": "Living room",               # switch a device in the simulated living room (home.py)
 }
 
 DEFAULT_CONFIG = {
@@ -110,4 +113,9 @@ def _action(action, label):
         if not isinstance(url, str) or not re.match(r"https?://[^\s]+$", url):
             raise ConfigError(f"{label}: webhook URL must start with http:// or https://")
         return {"type": kind, "url": url}
+    if kind == "home":
+        device = action.get("device")
+        if device not in HOME_DEVICES:
+            raise ConfigError(f"{label}: home device must be one of {', '.join(HOME_DEVICES)}")
+        return {"type": kind, "device": device}
     return {"type": "none"}

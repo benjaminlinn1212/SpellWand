@@ -61,6 +61,23 @@ class ActionDispatcherTest(unittest.TestCase):
         self.assertFalse(outcome.ok)
         self.assertIn("unknown action type", outcome.detail)
 
+    def test_home_action_switches_the_device_in_the_living_room(self):
+        switched = []
+
+        def home(device, label):
+            switched.append((device, label))
+            return "Lamp on"
+
+        dispatcher = ActionDispatcher(notifier=self.notifications, home=home)
+        outcome = dispatcher.dispatch("CIRCLE", {"type": "home", "device": "lamp"})
+        self.assertTrue(outcome.ok)
+        self.assertEqual(outcome.detail, "Lamp on")
+        self.assertEqual(switched, [("lamp", "CIRCLE")])
+
+    def test_home_action_without_a_home_is_reported_not_crashed(self):
+        outcome = self.dispatcher.dispatch("CIRCLE", {"type": "home", "device": "lamp"})
+        self.assertFalse(outcome.ok)
+
     def test_webhook_posts_the_gesture(self):
         RecordingHandler.requests = []
         with socketserver.TCPServer(("127.0.0.1", 0), RecordingHandler) as server:

@@ -1,0 +1,34 @@
+{# The simulated wand's toolbar, floating at the bottom of every page while the simulated wand
+   is connected. It floats, so it is in the same place on every page and moves nothing on them.
+   Each motion has a small drawing of its path. The gestures come first, then two movements
+   that are not gestures, for checking that they come out UNKNOWN. static/shared.js sends them
+   to app.py and lights the one being cast. #}
+{% set idle = status.connected and status.wand_state == "IDLE" and not status.recording %}
+{% set paths = {
+  "CIRCLE": '<circle cx="8" cy="8" r="5.25"/>',
+  "ZIGZAG": '<path d="M1.75 11 L5 5 L8 11 L11 5 L14.25 11"/>',
+  "HORIZONTAL_LINE": '<path d="M2 8 H14"/>',
+  "WOBBLE": '<path d="M1.5 8 C3.25 3.5 5.25 3.5 7 8 S10.75 12.5 12.5 8 S14.25 5.5 14.75 6.25"/>',
+  "STILL": '<circle cx="8" cy="8" r="2" fill="currentColor"/>',
+} %}
+{% macro move(motion, note="") -%}
+<button type="button" class="sim-move" data-motion="{{ motion }}" title="{{ motion_labels[motion] }}{{ note }}"{% if not idle %} disabled{% endif %}>
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{{ paths[motion] | safe }}</svg>
+        <span class="sim-name">{{ motion_names[motion] }}</span>
+      </button>
+{%- endmacro %}
+<div id="sim-panel" class="sim-dock" role="toolbar" aria-label="Simulated wand: hold the cast button and"{% if status.mode != "simulated" %} hidden{% endif %}>
+  <span class="sim-title">Simulated wand</span>
+  <span class="sim-divider" aria-hidden="true"></span>
+  <div class="sim-group" role="group" aria-label="Gestures">
+    {%- for motion in gestures %}
+    {{ move(motion) }}
+    {%- endfor %}
+  </div>
+  <span class="sim-divider" aria-hidden="true"></span>
+  <div class="sim-group" role="group" aria-label="Movements that are not gestures">
+    {%- for motion in other_motions %}
+    {{ move(motion, " (not a gesture)") }}
+    {%- endfor %}
+  </div>
+</div>

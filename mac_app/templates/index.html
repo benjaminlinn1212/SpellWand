@@ -1,4 +1,5 @@
 <!doctype html>
+{% set page = "grimoire" %}
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -19,35 +20,17 @@
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400..800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<script src="{{ url_for('static', filename='shared.js') }}" defer></script>
 <script src="{{ url_for('static', filename='app.js') }}" defer></script>
 </head>
-<body>
+<body{% if status.mode == "simulated" %} class="has-sim"{% endif %}>
 
-<header class="masthead">
-  <div class="masthead-inner">
-    <h1 class="wordmark">Grimoire</h1>
-    <div class="status" aria-live="polite">
-      <span class="link"><span id="link-dot" class="dot"></span><span id="link-text">Not connected</span></span>
-      <span id="wand-state" class="wand-state" data-state="OFFLINE" title="What the wand's status LED is showing">Offline</span>
-    </div>
-    <div class="masthead-actions">
-      <div class="theme-switch" role="group" aria-label="Colour theme">
-        <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
-        <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
-      </div>
-      <button id="connect-ble" type="button">Connect wand</button>
-      <button id="connect-sim" type="button" class="quiet">Use simulated wand</button>
-      <button id="disconnect" type="button" class="quiet" hidden>Disconnect</button>
-    </div>
-  </div>
-</header>
+{% include "_header.html" %}
+{% include "_sim.html" %}
 
 <div class="page">
+<h1 class="visually-hidden">Grimoire</h1>
 
-<section id="sim-panel" class="sim" hidden>
-  <p>Simulated wand. Hold the cast button and:</p>
-  <div id="sim-buttons" class="sim-buttons"></div>
-</section>
 
 <main class="grid">
   <figure class="stage">
@@ -101,7 +84,17 @@
   <section class="panel dataset" aria-labelledby="dataset-heading">
     <div class="panel-head">
       <h2 id="dataset-heading"><span>Dataset</span></h2>
-      <button id="check-dataset" type="button" class="quiet">Check dataset</button>
+      <div class="panel-actions">
+        <button id="check-dataset" type="button" class="quiet">Check dataset</button>
+        <button id="clear-dataset" type="button" class="quiet danger">Clear dataset</button>
+      </div>
+    </div>
+    <div id="clear-confirm" class="confirm" role="group" aria-labelledby="clear-question" hidden>
+      <p id="clear-question"></p>
+      <div class="confirm-buttons">
+        <button id="clear-yes" type="button" class="destroy"></button>
+        <button id="clear-no" type="button" class="quiet">Cancel</button>
+      </div>
     </div>
     <p id="dataset-summary" class="hint"></p>
     <div class="table-frame">
@@ -166,14 +159,7 @@
 
 </div>
 
-<footer class="colophon">
-  <div class="colophon-inner">
-    <p>Grimoire is the Mac app for SpellWand, a gesture wand by Disneers Corp.</p>
-    <p>Developed by Benjamin Lin, <a href="https://github.com/benjaminlinn1212" target="_blank" rel="noopener">github.com/benjaminlinn1212</a></p>
-    <p>© 2026 Disneers Corp</p>
-  </div>
-</footer>
+{% include "_footer.html" %}
 
-<div id="toast" class="toast" role="status" aria-live="polite"></div>
 </body>
 </html>

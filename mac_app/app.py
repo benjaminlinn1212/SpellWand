@@ -21,9 +21,10 @@ from pathlib import Path
 from flask import Flask, Response, jsonify, render_template, request
 
 from config import ACTION_TYPES, CONFIG_PATH, load_config, save_config
+from home import HOME_DEVICES
 from controller import SpellWandController
 from recorder import DATA_DIR
-from simulator import GESTURES, OTHER_MOTIONS
+from simulator import GESTURES, MOTION_LABELS, MOTION_NAMES, OTHER_MOTIONS
 
 HOST = "127.0.0.1"  # this machine only: never reachable from the network
 PORT = 8780         # (macOS uses 5000 for AirPlay)
@@ -67,9 +68,21 @@ def create_app(controller):
     def body():
         return request.get_json(silent=True) or {}
 
+    def page(template, **extra):
+        """Each page arrives already showing the wand's connection and, with the simulated wand,
+        its motions, so nothing changes as it opens: the live updates only carry what changes
+        after that."""
+        return render_template(template, status=controller.status(), gestures=GESTURES,
+                               other_motions=OTHER_MOTIONS, motion_labels=MOTION_LABELS,
+                               motion_names=MOTION_NAMES, **extra)
+
     @app.get("/")
     def index():
-        return render_template("index.html")
+        return page("index.html")
+
+    @app.get("/living-room")
+    def living_room():
+        return page("home.html", home=controller.home_state())
 
     @app.get("/api/status")
     def status():
@@ -77,7 +90,10 @@ def create_app(controller):
 
     @app.get("/api/meta")
     def meta():
-        return jsonify(action_types=ACTION_TYPES, simulated_motions=list(GESTURES) + list(OTHER_MOTIONS))
+        return jsonify(action_types=ACTION_TYPES, simulated_motions=list(GESTURES) + list(OTHER_MOTIONS),
+                       # a list, because Flask sorts the keys of a JSON object
+                       home_devices=[{"device": device, "name": name, "off": off, "on": on}
+                                     for device, (name, off, on) in HOME_DEVICES.items()])
 
     @app.post("/api/connect")
     @api
@@ -109,6 +125,15 @@ def create_app(controller):
         controller.stop_recording()
         return jsonify(controller.status())
 
+    @app.get("/api/home")
+    def home_state():
+        return jsonify(devices=controller.home_state())
+
+    @app.post("/api/home")
+    @api
+    def toggle_home():
+        return jsonify(devices=controller.toggle_home(body().get("device")))
+
     @app.get("/api/samples")
     @api
     def samples():
@@ -125,6 +150,11 @@ def create_app(controller):
     def delete(sample_id):
         controller.delete_sample(sample_id)
         return jsonify(ok=True)
+
+    @app.post("/api/dataset/clear")
+    @api
+    def clear_dataset():
+        return jsonify(controller.clear_dataset())
 
     @app.post("/api/dataset/check")
     @api

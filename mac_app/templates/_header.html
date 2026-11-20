@@ -1,0 +1,31 @@
+{# The top bar, the same on every page: the page tabs, the wand's connection and state, the
+   theme switch and the connect buttons. Set `page` before including it; app.py passes
+   `status`, so the bar arrives showing the current connection. static/shared.js keeps it up
+   to date. #}
+{% set connected = status.connected %}
+<header class="masthead">
+  <div class="masthead-inner">
+    <nav class="pages" aria-label="Pages">
+      <span class="tab-mark" aria-hidden="true"></span>
+      <a href="/"{% if page == "grimoire" %} aria-current="page"{% endif %}>Grimoire</a>
+      <a href="/living-room"{% if page == "living-room" %} aria-current="page"{% endif %}>Living room</a>
+    </nav>
+    <div class="status" aria-live="polite">
+      <span class="link"><span id="link-dot" class="dot{% if connected %} connected{% endif %}"></span><span id="link-text">
+        {%- if not connected %}No wand connected{% elif status.mode == "simulated" %}Simulated wand connected{% else %}Wand connected{% endif -%}
+      </span></span>
+      <span id="wand-state" class="wand-state" data-state="{{ status.wand_state if connected else 'OFFLINE' }}" title="What the wand's status LED is showing">
+        {{- status.wand_state if connected else '' -}}
+      </span>
+    </div>
+    <div class="masthead-actions">
+      <div class="theme-switch" role="group" aria-label="Colour theme">
+        <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
+        <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
+      </div>
+      <button id="connect-ble" type="button"{% if connected %} hidden{% endif %}>Connect wand</button>
+      <button id="connect-sim" type="button" class="quiet"{% if connected %} hidden{% endif %}>Use simulated wand</button>
+      <button id="disconnect" type="button" class="quiet"{% if not connected %} hidden{% endif %}>Disconnect</button>
+    </div>
+  </div>
+</header>

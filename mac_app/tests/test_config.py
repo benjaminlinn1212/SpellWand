@@ -78,6 +78,8 @@ class ValidationTest(unittest.TestCase):
             {"type": "notify"},
             {"type": "webhook", "url": "ftp://example.com/x"},
             {"type": "webhook"},
+            {"type": "home"},
+            {"type": "home", "device": "toaster"},
         ]
         for action in bad_actions:
             with self.subTest(action=action):
@@ -88,6 +90,8 @@ class ValidationTest(unittest.TestCase):
             {"type": "none"},
             {"type": "notify", "message": "Lumos!"},
             {"type": "webhook", "url": "http://homeassistant.local:8123/api/webhook/spellwand"},
+            {"type": "home", "device": "lamp"},
+            {"type": "home", "device": "curtains"},
         ]
         for action in good_actions:
             with self.subTest(action=action):

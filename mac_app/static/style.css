@@ -2,16 +2,19 @@
 
    Neutral greys in a light and a dark mode, with one theme colour, amber gold, kept for what
    matters and for small details: the main button of each area, the reading on the gauge, the
-   piece of rule under the title and under each heading, the chosen option, and whatever the
+   piece of rule under the current page and under each heading, the chosen option, and whatever the
    pointer is on: a control answers the pointer by lighting up. The motion view is a room of
    graph paper, light or dark with the page, and the trail is drawn in the spell's colour. The
    last cast's name sits on a block of that colour, the colour the wand's LED flashes.
-   Corners are nearly square. Every area keeps its size: lists scroll inside their panel
-   instead of growing. app.js reads the chart colours from the variables here. */
+   Corners grow with the size of the thing (--r-mark to --r-panel). Every area keeps its size:
+   lists scroll inside their panel instead of growing. app.js reads the chart colours from the
+   variables here. */
 
 :root {
   --bg: #f5f5f7;            /* page */
   --surface: #ffffff;       /* panels, top bar */
+  --float: #ffffff;         /* parts floating above the page: the simulated wand's toolbar */
+  --float-edge: #d6d6dd;
   --field: #ffffff;         /* inputs */
   --ink: #16161a;           /* text */
   --ink-soft: #5b5b66;      /* secondary text */
@@ -52,7 +55,15 @@
   --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%2316161a' stroke-width='1.6'/%3E%3C/svg%3E");
 
   --font: "Archivo", "Helvetica Neue", Arial, sans-serif;
-  --radius: 3px;
+  /* Corners grow with the size of the thing, as in GitHub's Primer, Vercel's Geist and Linear:
+     small marks 4px, controls 6px, blocks inside a panel 8px, panels and floating parts 12px.
+     Something set inside another, with a gap between, takes the outer corner less that gap. */
+  --r-mark: 4px;
+  --r-control: 6px;
+  --r-block: 8px;
+  --r-panel: 12px;
+  --control: 36px;          /* the height of a button or field */
+  --control-small: 32px;    /* in toolbars, beside headings, inside charts */
   --gap: 16px;
   --page: 1320px;
   --stage-height: clamp(540px, 66vh, 640px);   /* the motion view and the result beside it */
@@ -62,6 +73,8 @@
 :root[data-theme="dark"] {
   --bg: #101013;
   --surface: #19191e;
+  --float: #24242b;         /* a shadow hardly shows on a dark page, so floating parts are lighter */
+  --float-edge: #3a3a44;
   --field: #121216;
   --ink: #f2f2f5;
   --ink-soft: #a8a8b3;
@@ -158,9 +171,9 @@ button, input, select {
   color: inherit;
 }
 
-/* A button answers the pointer by filling from its bottom edge: a main button (theme colour)
-   fills with ink, a quiet one (outlined) lights up in the theme colour. The fill is a
-   background layer that grows, so nothing moves and a click never waits for it. */
+/* A button answers the pointer by filling, at once: a main button (theme colour) fills with
+   ink, a quiet one (outlined) lights up in the theme colour. Hover changes are instant
+   everywhere on the page; only a press gives a short movement. */
 button {
   --base: var(--brand);      /* the button at rest */
   --text: var(--on-brand);
@@ -170,17 +183,17 @@ button {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 40px;
-  padding: 0 16px;
+  min-height: var(--control);
+  padding: 0 14px;
   border: 0;
-  border-radius: var(--radius);
+  border-radius: var(--r-control);
   background: var(--base) linear-gradient(var(--fill), var(--fill)) no-repeat 0 100% / 100% 0;
   color: var(--text);
-  font-size: 0.9375rem;
-  font-weight: 700;
+  font-size: 0.875rem;
+  font-weight: 650;
   white-space: nowrap;
   cursor: pointer;
-  transition: background-size 0.14s ease-out, color 0.14s, box-shadow 0.14s, transform 0.08s;
+  transition: transform 0.08s;   /* the press only */
 }
 button:active:not(:disabled) { transform: translateY(1px) scale(0.98); }   /* it gives under the finger */
 button.quiet {
@@ -192,6 +205,8 @@ button.quiet {
   box-shadow: inset 0 0 0 1px var(--line-strong);
 }
 button.recording { --base: var(--recording); --text: #ffffff; }
+button.quiet.danger { --fill: var(--bad); --on-fill: var(--on-bad); }   /* outlined, fills red under the pointer */
+button.destroy { --base: var(--bad); --text: var(--on-bad); --fill: var(--ink); --on-fill: var(--surface); }
 button.recording::before {   /* a light that blinks while the wand records */
   content: "";
   width: 8px;
@@ -203,8 +218,8 @@ button.recording::before {   /* a light that blinks while the wand records */
 @keyframes blink { to { opacity: 0.25; } }
 button:disabled { opacity: 0.45; cursor: not-allowed; }
 
-/* A text button (View, Delete, Remove): words only. Under the pointer a line draws itself
-   beneath them, in the theme colour, or in red if the button removes something. */
+/* A text button (View, Delete, Remove): words only. Under the pointer a line appears beneath
+   them, in the theme colour, or in red if the button removes something. */
 button.text {
   --base: transparent;
   --text: var(--ink);
@@ -226,7 +241,6 @@ button.text::after {
   background: var(--mark);
   transform: scaleX(0);
   transform-origin: left;
-  transition: transform 0.14s ease-out;
 }
 button.text:focus-visible::after { transform: scaleX(1); }
 button.text.danger { --text: var(--ink-soft); --mark: var(--bad); }
@@ -252,12 +266,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
 
 input, select {
   accent-color: var(--brand);
-  min-height: 40px;
+  min-height: var(--control);
   padding: 0 12px;
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
+  border-radius: var(--r-control);
   background-color: var(--field);
-  transition: border-color 0.12s, box-shadow 0.12s;
 }
 input:focus, select:focus { border-color: var(--ink); box-shadow: inset 0 -2px 0 var(--brand); }
 input::placeholder { color: var(--ink-soft); opacity: 1; }
@@ -277,6 +290,7 @@ select {
 @media (hover: hover) {
   button:hover:not(:disabled) { background-size: 100% 100%; color: var(--on-fill); }
   button.quiet:hover:not(:disabled) { box-shadow: inset 0 0 0 1px var(--brand); }
+  button.quiet.danger:hover:not(:disabled) { box-shadow: inset 0 0 0 1px var(--bad); }
   button.text:hover:not(:disabled) { color: var(--ink); }
   button.text:hover:not(:disabled)::after { transform: scaleX(1); }
   button.text.danger:hover:not(:disabled) { color: var(--bad); }
@@ -300,7 +314,7 @@ select {
   min-width: 0;
   padding: 20px;
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: var(--r-panel);
   background: var(--surface);
 }
 
@@ -323,26 +337,56 @@ select {
   margin: 0 auto;
   padding: 0 24px;
 }
-/* The app's name, the largest words on the page. It stands on the top bar's rule the way a
-   heading stands on its panel's: the piece of rule under it is in the theme colour. */
-.wordmark {
+/* The two pages, Grimoire and Living room, as two tabs set alike. The page you are on is
+   shaded in the theme colour's pale tint, from the top of the bar down to its rule, and
+   underlined in the theme colour on that rule, the way a heading's sits on its panel's.
+   shared.js moves that shade and line (.tab-mark): when you switch pages they start under the
+   page you came from and slide across to this one. Under the pointer, the other tab gets a faint shade and a grey line.
+   Without shared.js, the current tab is simply shaded and underlined. */
+.pages { position: relative; display: flex; align-self: stretch; gap: 4px; }
+.pages a {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
-  align-self: stretch;
   margin-bottom: -1px;
-  padding-top: 3px;
-  border-bottom: 3px solid var(--brand);
-  font-size: 1.875rem;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1;
+  padding: 3px 16px 0;
+  color: var(--ink-soft);
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-decoration: none;
 }
-.status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; color: var(--ink-soft); font-size: 0.9375rem; }
+.pages a.under-mark,
+.pages:not(.has-mark) a[aria-current="page"] { color: var(--ink); }
+.pages:not(.has-mark) a[aria-current="page"],
+.tab-mark { background: var(--tint); box-shadow: inset 0 -3px 0 var(--brand); }
+@media (hover: hover) {
+  .pages a:not([aria-current]):hover {
+    background: color-mix(in srgb, var(--line) 55%, transparent);
+    box-shadow: inset 0 -3px 0 var(--line-strong);
+    color: var(--ink);
+  }
+}
+.tab-mark {
+  position: absolute;
+  top: 0;
+  bottom: -1px;
+  left: 0;
+  display: none;
+  transition: transform 0.3s cubic-bezier(0.3, 0.7, 0.2, 1), width 0.3s cubic-bezier(0.3, 0.7, 0.2, 1);
+}
+.has-mark .tab-mark { display: block; }
+.tab-mark.still { transition: none; }
+
+/* The connection is a reading, not a place to go, so it sits apart from the pages: at the
+   right, beside the controls it depends on, in smaller, softer letters. */
+.status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-left: auto; color: var(--ink-soft); font-size: 0.8125rem; }
 .link { display: flex; align-items: center; gap: 8px; }
-.masthead-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }
+.masthead-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.masthead-actions > button { min-height: 34px; }   /* as tall as the theme switch beside them */
 
 /* Connection: hollow when off, filled when connected. */
-.link { color: var(--ink); }
 .dot {
   flex: none;
   width: 10px;
@@ -359,9 +403,9 @@ select {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 3px 10px;
+  padding: 2px 8px;
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
+  border-radius: var(--r-mark);
   color: var(--ink);
   font-size: 0.8125rem;
   font-weight: 700;
@@ -399,7 +443,7 @@ select {
   display: inline-flex;
   margin-right: 8px;
   padding: 3px;
-  border-radius: var(--radius);
+  border-radius: var(--r-control);
   box-shadow: inset 0 0 0 1px var(--line-strong);
 }
 .theme-switch button {
@@ -407,13 +451,17 @@ select {
   --text: var(--ink-soft);
   --fill: var(--line);
   --on-fill: var(--ink);
-  min-height: 34px;
+  min-height: 28px;
   padding: 0 12px;
-  border-radius: 2px;
-  font-size: 0.875rem;
+  border-radius: calc(var(--r-control) - 3px);   /* inside the switch, 3px in from its edge */
+  font-size: 0.8125rem;
   font-weight: 600;
 }
-.theme-switch button[aria-pressed="true"] {
+/* The chosen theme, styled from the page's own theme (set before it is drawn, in the template's
+   head) rather than from aria-pressed (set later by the script), so it is right from the first
+   frame and does not light up as each page opens. */
+:root[data-theme="light"] .theme-switch [data-theme-choice="light"],
+:root[data-theme="dark"] .theme-switch [data-theme-choice="dark"] {
   --base: var(--brand);
   --text: var(--on-brand);
   --fill: var(--brand);
@@ -421,20 +469,44 @@ select {
   cursor: default;
 }
 
-.sim {
+/* ---------- the simulated wand's toolbar: floating at the bottom of every page ----------
+   A floating part, so it has the panels' 12px corners, a shadow, and 6px of padding that sets
+   its buttons' 6px corners evenly inside. Its buttons are plain until pointed at; the motion
+   being cast stays lit (.casting) while the others wait. */
+
+.sim-dock {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  z-index: 15;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 8px 16px;
-  margin-bottom: var(--gap);
-  padding: 12px 16px;
-  border: 1px dashed var(--line-strong);
-  border-radius: var(--radius);
-  color: var(--ink-soft);
-  font-size: 0.9375rem;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--float-edge);
+  border-radius: var(--r-panel);
+  background: var(--float);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.14);
+  transform: translateX(-50%);
 }
-.sim-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
-.sim-buttons button { min-height: 36px; padding: 0 12px; }
+.sim-title { padding: 0 8px 0 10px; color: var(--ink-soft); font-size: 0.8125rem; font-weight: 600; white-space: nowrap; }
+.sim-divider { flex: none; align-self: stretch; width: 1px; margin: 6px 2px; background: var(--float-edge); }
+.sim-group { display: flex; gap: 2px; }
+.sim-move {
+  --base: transparent;
+  --text: var(--ink);
+  --fill: var(--brand);
+  --on-fill: var(--on-brand);
+  gap: 7px;
+  padding: 0 12px 0 10px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.sim-move svg { flex: none; }
+.sim-move.casting { --base: var(--brand); --text: var(--on-brand); }
+.sim-move.casting:disabled { opacity: 1; }
+body.has-sim { padding-bottom: 72px; }   /* so the end of the page can scroll clear of it */
+.has-sim .toast { bottom: 84px; }        /* messages appear above it */
 
 /* ---------- the page grid ----------
    A wide column and a narrow one. Row 1: the motion view and the last cast, the same height.
@@ -451,7 +523,7 @@ select {
   position: relative;
   height: var(--stage-height);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: var(--r-panel);
   background: var(--stage);
   overflow: hidden;
 }
@@ -473,13 +545,13 @@ select {
   position: absolute;
   right: 14px;
   bottom: 12px;
-  min-height: 36px;
+  min-height: var(--control-small);
   padding: 0 14px 0 12px;
   font-size: 0.875rem;
   font-weight: 600;
   box-shadow: inset 0 0 0 1px var(--line-strong);
 }
-.stage-button svg { color: var(--stage-light); transition: transform 0.2s ease-out, color 0.14s; }
+.stage-button svg { color: var(--stage-light); }
 @media (hover: hover) {   /* the arrow leans back, ready to turn */
   .stage-button:hover:not(:disabled) { box-shadow: inset 0 0 0 1px var(--brand); }
   .stage-button:hover:not(:disabled) svg { color: currentColor; transform: rotate(-50deg); }
@@ -504,7 +576,7 @@ select {
   align-items: center;
   height: 84px;
   padding: 0 20px;
-  border-radius: var(--radius);
+  border-radius: var(--r-block);
   background: var(--spell, var(--bg));
   color: var(--on-spell, var(--ink));
   overflow: hidden;
@@ -534,10 +606,11 @@ select {
 
 /* The threshold on a scale, and how far the cast was from its nearest example. */
 .gauge { margin-top: 28px; }
-.gauge-track { position: relative; height: 6px; background: var(--line); }
+.gauge-track { position: relative; height: 6px; border-radius: 3px; background: var(--line); }
 .gauge-accept {
   position: absolute;
   inset: 0 auto 0 0;
+  border-radius: inherit;
   background: color-mix(in srgb, var(--good) 55%, var(--line));
   transition: width 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
@@ -580,7 +653,7 @@ select {
   transition: left 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-.facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 12px; border: 1px solid var(--line); border-radius: var(--radius); }
+.facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 12px; border: 1px solid var(--line); border-radius: var(--r-block); }
 .facts div { padding: 8px 12px; }
 .facts div + div { border-left: 1px solid var(--line); }
 .facts dt { color: var(--ink-soft); font-size: 0.75rem; white-space: nowrap; }
@@ -626,7 +699,26 @@ td .swatch { margin-right: 4px; }
 /* The heading and its button share the rule under them. */
 .panel-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 14px; border-bottom: 1px solid var(--line); }
 .panel-head h2 { margin-bottom: 0; border-bottom: 0; }
-.panel-head button { min-height: 34px; margin-bottom: 8px; }
+.panel-head button { min-height: var(--control-small); margin-bottom: 8px; }
+.panel-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+
+/* Asking before something that cannot be taken back with a click: a red mark at its start,
+   the question, and the two answers. */
+.confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: var(--r-block);
+  background: color-mix(in srgb, var(--bad) 7%, var(--surface));
+  box-shadow: inset 3px 0 0 var(--bad);
+}
+.confirm p { flex: 1 1 280px; margin: 0; font-size: 0.9375rem; }
+.confirm-buttons { display: flex; gap: 8px; }
+.confirm button { min-height: var(--control-small); }
 .dataset .table-frame { position: relative; flex: 1 1 auto; min-height: 320px; }
 .table-scroll { position: absolute; inset: 0; overflow: auto; }
 
@@ -651,10 +743,9 @@ td { padding: 8px 12px 8px 0; border-bottom: 1px solid var(--line); vertical-ali
 th:last-child, td:last-child { padding-right: 0; }
 .samples th:first-child, .samples td:first-child { padding-left: 12px; }
 .samples td:first-child { white-space: nowrap; }   /* the date and time stay on one line */
-.samples tbody tr { background: var(--surface); transition: background-color 0.1s; }
-.samples tbody td:first-child { transition: box-shadow 0.12s; }
+.samples tbody tr { background: var(--surface); }
 /* View and Delete stay in sight at the right edge when a narrow window makes the table scroll sideways. */
-.samples th:last-child, .samples td:last-child { position: sticky; right: 0; padding-left: 12px; }
+.samples th:last-child, .samples td:last-child { position: sticky; right: 0; padding: 8px 12px; }   /* the same room at the row's end as at its start */
 .samples th:last-child { z-index: 2; }
 .samples td:last-child { background: inherit; }
 .overflowing .samples td:last-child { box-shadow: inset 1px 0 0 var(--line); }   /* app.js marks a table that scrolls sideways */
@@ -699,7 +790,7 @@ th:last-child, td:last-child { padding-right: 0; }
 .gesture-item .action-cell, .gesture-note { grid-column: 2 / -1; }
 .gesture-note { margin-top: -6px; color: var(--ink-soft); font-size: 0.875rem; }
 .action-cell { display: grid; grid-template-columns: 168px minmax(0, 1fr); gap: 8px; }
-.action-cell select, .action-cell input { width: 100%; min-height: 36px; font-size: 0.9375rem; }
+.action-cell select, .action-cell input { width: 100%; font-size: 0.9375rem; }
 
 .add-row { margin: 16px 0 0; }
 .save-row { margin-top: 20px; }
@@ -712,7 +803,7 @@ th:last-child, td:last-child { padding-right: 0; }
   width: 242px;
   padding: 14px 16px 16px;
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
+  border-radius: var(--r-panel);
   background: var(--surface);
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
   animation: pop-in 0.12s ease-out 1;
@@ -730,7 +821,7 @@ th:last-child, td:last-child { padding-right: 0; }
   font-size: 0.875rem;
   font-weight: 600;
 }
-.color-hex input { flex: 1 1 auto; min-width: 0; min-height: 34px; font-size: 0.9375rem; font-weight: 400; }
+.color-hex input { flex: 1 1 auto; min-width: 0; min-height: var(--control-small); font-size: 0.9375rem; font-weight: 400; }
 
 /* ---------- footer: what this is and who made it ---------- */
 
@@ -751,7 +842,6 @@ th:last-child, td:last-child { padding-right: 0; }
   font-weight: 600;
   text-decoration: underline 1px var(--line-strong);
   text-underline-offset: 4px;
-  transition: text-decoration-color 0.14s;
 }
 @media (hover: hover) {
   .colophon a:hover { text-decoration-color: var(--brand); text-decoration-thickness: 2px; }
@@ -766,7 +856,7 @@ th:last-child, td:last-child { padding-right: 0; }
   z-index: 20;
   max-width: min(90vw, 36rem);
   padding: 12px 16px;
-  border-radius: var(--radius);
+  border-radius: var(--r-block);
   background: var(--ink);
   color: var(--bg);
   font-size: 0.9375rem;
@@ -784,7 +874,10 @@ th:last-child, td:last-child { padding-right: 0; }
 @media (max-width: 1000px) {
   .masthead { position: static; }
   .masthead-inner { gap: 10px 16px; min-height: 0; padding: 12px 16px; }
-  .wordmark { align-self: center; margin-bottom: 0; padding-top: 0; border-bottom: 0; font-size: 1.75rem; }
+  .pages { flex-basis: 100%; align-self: auto; padding-top: 0; }
+  .pages a { min-height: 44px; margin-bottom: 0; }   /* the header wraps here, so the line sits under the words */
+  .tab-mark { top: 0; bottom: 0; }
+  .status { margin-left: 0; }
   .masthead-actions { margin-left: 0; }
   .page { padding: var(--gap) 16px 32px; }
   .colophon-inner { padding: 16px 16px 24px; }
@@ -799,6 +892,14 @@ th:last-child, td:last-child { padding-right: 0; }
 
 @media (max-width: 620px) {
   .signals { grid-template-columns: minmax(0, 1fr); }
+  /* The toolbar spans the screen; each motion's drawing sits above its name. */
+  .sim-dock { left: 8px; right: 8px; bottom: 8px; transform: none; justify-content: space-between; }
+  .sim-title { display: none; }
+  .sim-title + .sim-divider { display: none; }
+  .sim-group { flex: 1 1 auto; justify-content: space-around; }
+  .sim-move { flex-direction: column; gap: 3px; min-height: 48px; padding: 4px 6px; font-size: 0.6875rem; }
+  body.has-sim { padding-bottom: 76px; }
+  .has-sim .toast { bottom: 76px; }
   .panel { padding: 16px; }
   .gesture-item .action-cell { grid-column: 1 / -1; }
   .setting label { align-self: center; }
