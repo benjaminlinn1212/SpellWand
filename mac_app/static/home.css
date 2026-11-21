@@ -25,7 +25,7 @@
 
 .home {
   max-width: 1120px;
-  min-height: calc(100vh - 70px);   /* the room fills the window under the top bar, so the footer
+  min-height: calc(100vh - 65px);   /* the room fills the window under the top bar, so the footer
                                        starts below it, not under the simulated wand's toolbar */
   margin: 0 auto;
   padding: 40px 24px 48px;
@@ -38,7 +38,7 @@
 .ln { fill: none; stroke: var(--room-ink); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .ln.fine { stroke: var(--room-fine); stroke-width: 1.5; }
 .ln.thick { stroke-width: 6; }
-.ln.solid { fill: var(--bg); }
+.ln.solid { fill: var(--canvas); }
 .knob { fill: var(--room-ink); }
 .glow-stop { stop-color: var(--glow); }
 
@@ -57,14 +57,14 @@
 .curtains-on .curtain { transform: scaleX(0.26); }
 
 /* TV: the picture and its glow fade in */
-.tv-body { fill: var(--bg); }
+.tv-body { fill: var(--canvas); }
 .screen { fill: var(--screen-off); }
 .picture, .tv-glow { opacity: 0; transition: opacity 0.35s ease-out; }
 .tv-on .picture { opacity: 1; }
 .tv-on .tv-glow { opacity: 0.45; }
 
 /* lamp: the shade lights up, light falls to the floor and spreads around it */
-.shade { fill: var(--bg); transition: fill 0.3s; }
+.shade { fill: var(--canvas); transition: fill 0.3s; }
 .lamp-glow, .lamp-cone { opacity: 0; transition: opacity 0.6s ease-out; }
 .lamp-on .shade { fill: var(--shade-on); }
 .lamp-on .lamp-glow, .lamp-on .lamp-cone { opacity: 1; }

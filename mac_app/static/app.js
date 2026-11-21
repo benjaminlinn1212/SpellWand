@@ -1,11 +1,5 @@
 // SpellWand UI: talks to app.py's JSON API and listens to its live event stream.
 
-const NEW_GESTURE_COLOR = "#b48cff";  // the LED colour a newly added gesture starts with
-// Colours the wand's LED shows well: bright, and easy to tell apart.
-const LED_COLORS = [
-  "#ff0000", "#ff4000", "#ffaa00", "#ffe600", "#00c828", "#00d6a0",
-  "#00b4ff", "#0050ff", "#7a3cff", "#d028ff", "#ff2d8a", "#ffffff",
-];
 const AXES = ["x (along wand)", "y (left)", "z (up)"];
 const CHART_FONT = "Archivo, 'Helvetica Neue', Arial, sans-serif";
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -47,38 +41,12 @@ function readInk() {
 }
 let ink = readInk();
 
-function showThemeChoice() {
-  const theme = document.documentElement.dataset.theme;
-  for (const button of document.querySelectorAll("[data-theme-choice]")) {
-    button.setAttribute("aria-pressed", String(button.dataset.themeChoice === theme));
-  }
-}
-
-let themeFade = null;
-function setTheme(theme) {
-  const root = document.documentElement;
-  root.classList.add("theme-fade");  // style.css lets the colours cross-fade while this is on
-  clearTimeout(themeFade);
-  themeFade = setTimeout(() => root.classList.remove("theme-fade"), 300);
-  root.dataset.theme = theme;
-  ink = readInk();
-  showThemeChoice();
-  redrawCharts();
-}
-
+// The theme switch is shared (shared.js). When the theme changes, the charts are redrawn in
+// its colours.
 function wireTheme() {
-  showThemeChoice();
-  for (const button of document.querySelectorAll("[data-theme-choice]")) {
-    button.addEventListener("click", () => {
-      try { localStorage.setItem("spellwand-theme", button.dataset.themeChoice); } catch { /* private window */ }
-      setTheme(button.dataset.themeChoice);
-    });
-  }
-  // Until a theme is chosen here, follow the system's.
-  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (event) => {
-    let saved = null;
-    try { saved = localStorage.getItem("spellwand-theme"); } catch { /* private window */ }
-    if (!saved) setTheme(event.matches ? "dark" : "light");
+  Shared.onThemeChange(() => {
+    ink = readInk();
+    redrawCharts();
   });
 }
 
@@ -120,11 +88,14 @@ async function attempt(action) {
   }
 }
 
+// A gesture's label written as words, for reading: HORIZONTAL_LINE is "Horizontal line".
+const nameOf = (label) => Shared.gestureName(label);
+
 function colorFor(label) {
   const config = state.config;
   if (!config) return ink.soft;
   if (label === "UNKNOWN") return config.unknown_color;
-  return config.gestures[label]?.color ?? NEW_GESTURE_COLOR;
+  return config.gestures[label]?.color ?? ink.soft;   // a gesture no longer in the settings: grey
 }
 
 const fmt = (x) => (x === null || x === undefined ? "–" : Number(x).toFixed(2));
@@ -142,13 +113,15 @@ function signalLayout(empty = false) {
   return {
     paper_bgcolor: "rgba(0,0,0,0)",
     plot_bgcolor: "rgba(0,0,0,0)",
-    font: { family: CHART_FONT, color: ink.soft, size: 12 },
-    margin: { l: 40, r: 8, t: 30, b: 40 },
-    legend: { orientation: "h", x: 1, xanchor: "right", y: 1, yanchor: "bottom", font: { color: ink.text } },
+    font: { family: CHART_FONT, color: ink.soft, size: 11 },
+    margin: { l: 36, r: 4, t: 32, b: 36 },
+    legend: { orientation: "h", x: 0, xanchor: "left", y: 1, yanchor: "bottom", font: { color: ink.soft, size: 12 } },
     hovermode: "x unified",
     hoverlabel: { bgcolor: ink.surface, bordercolor: ink.strong, font: { family: CHART_FONT, color: ink.text, size: 12 } },
-    xaxis: { title: { text: "seconds", standoff: 8 }, hoverformat: ".2f", gridcolor: ink.line, zeroline: false, fixedrange: empty },
-    yaxis: { gridcolor: ink.line, zerolinecolor: ink.strong, fixedrange: empty },
+    // Only level lines across: the readings are read against height, and time is on the axis.
+    xaxis: { title: { text: "seconds", standoff: 6 }, hoverformat: ".2f", showgrid: false, zeroline: false,
+             ticks: "outside", ticklen: 4, tickcolor: ink.line, linecolor: ink.line, showline: true, fixedrange: empty },
+    yaxis: { gridcolor: ink.line, zerolinecolor: ink.strong, zerolinewidth: 1, nticks: 6, fixedrange: empty },
   };
 }
 
@@ -389,6 +362,7 @@ function setTrailZoomSpeed() {
 // points, in its own box or in the one given.
 function paintTrail(count, box) {
   const trail = state.trail;
+  $("trail").parentElement.classList.toggle("empty", !trail.trace);
   let traces = null, shown = trail.box;
   if (trail.trace) {
     traces = trailTraces(trail.trace, trail.color, count ?? trail.trace.x.length);
@@ -469,9 +443,9 @@ function renderTrainCount() {
   const label = $("train-label").value;
   const n = state.status?.dataset?.[label] ?? 0;
   $("train-count").textContent = !label ? ""
-    : n === 0 ? `${label} has no examples yet. Record five or more.`
-    : n < 5 ? `${label} has ${n} ${n === 1 ? "example" : "examples"}. Five or more works well.`
-    : `${label} has ${n} examples.`;
+    : n === 0 ? `${nameOf(label)} has no examples yet. Record five or more.`
+    : n < 5 ? `${nameOf(label)} has ${n} ${n === 1 ? "example" : "examples"}. Five or more works well.`
+    : `${nameOf(label)} has ${n} examples.`;
 }
 
 let historyShown = null;  // what the list last showed, to tell when a cast has been added
@@ -479,7 +453,7 @@ function renderHistory(history) {
   const list = $("history");
   list.replaceChildren(...history.map((entry) => el("li", {}, [
     el("span", { className: "swatch", style: `background:${colorFor(entry.label)}` }),
-    el("span", { className: "name" }, entry.label),
+    el("span", { className: "name" }, nameOf(entry.label)),
     el("span", { className: "distance" }, entry.distance === null ? "no motion" : fmt(entry.distance)),
   ])));
   if (!history.length) list.replaceChildren(el("li", { className: "none" }, "Nothing cast yet."));
@@ -492,7 +466,7 @@ function renderDatasetSummary(counts) {
   const entries = Object.entries(counts);
   const total = entries.reduce((sum, [, n]) => sum + n, 0);
   $("dataset-summary").textContent = total
-    ? `${total} samples: ` + entries.map(([label, n]) => `${n} ${label}`).join(", ") + "."
+    ? `${total} samples: ` + entries.map(([label, n]) => `${n} ${nameOf(label)}`).join(", ") + "."
     : "No samples yet. Record a few examples of each gesture under Train a gesture.";
 }
 
@@ -533,7 +507,7 @@ function showResult(result) {
   verdict.classList.remove("empty", "lit");
   verdict.style.setProperty("--spell", result.color);
   verdict.style.setProperty("--on-spell", textOn(result.color));
-  $("verdict-label").textContent = result.label;
+  $("verdict-label").textContent = nameOf(result.label);
   fitSpellName();
   void verdict.offsetWidth;  // lets the "lit" animation play again for this result
   verdict.classList.add("lit");
@@ -542,7 +516,7 @@ function showResult(result) {
   $("verdict-detail").textContent = result.label !== "UNKNOWN"
     ? `Distance ${fmt(result.distance)}, within the threshold of ${fmt(result.threshold)}.`
     : result.distance !== null
-      ? `Nearest is ${result.nearest_label} at distance ${fmt(result.distance)}, above the threshold of ${fmt(result.threshold)}.`
+      ? `Nearest is ${nameOf(result.nearest_label)} at distance ${fmt(result.distance)}, above the threshold of ${fmt(result.threshold)}.`
       : trained
         ? "The wand barely moved, or the cast was too short."
         : "No gestures are trained yet, so nothing can be recognised. Record examples under Train a gesture.";
@@ -555,7 +529,7 @@ function showResult(result) {
   $("fact-length").textContent = `${seconds} s`;
   $("fact-answer").textContent = result.response_ms === null ? "–" : `${Math.round(result.response_ms)} ms`;
   $("verdict-action").textContent = "";
-  drawTrail(result, result.color, `${result.label}: ${result.sample_count} samples over ${seconds} s`, !endLiveTrail());
+  drawTrail(result, result.color, `${nameOf(result.label)}: ${result.sample_count} samples over ${seconds} s`, !endLiveTrail());
   setSignals(result.t, result.accel, result.gyro);
 }
 
@@ -568,187 +542,22 @@ function showAction(outcome) {
     : `The action didn't work: ${outcome.detail}`;
 }
 
-// ---------- colour chooser ----------
-// A colour square is a button that holds its colour as its value. Pressing it opens one small
-// panel under it: the colours the wand's LED shows well, and a field for any other colour.
-
-const colors = { box: null, hex: null, target: null };
-
-function setSwatch(button, color) {
-  button.value = color;
-  button.style.setProperty("--swatch", color);
-}
-
-function swatchButton(color, name, className) {
-  const button = el("button", { type: "button", className: `swatch-button ${className}`,
-    "aria-label": `${name} colour`, "aria-haspopup": "dialog" });
-  setSwatch(button, color);
-  button.addEventListener("click", () => openColors(button, name));
-  return button;
-}
-
-function buildColors() {
-  const presets = LED_COLORS.map((color) => {
-    const choice = el("button", { type: "button", className: "swatch-button", title: color, "aria-label": color });
-    setSwatch(choice, color);
-    choice.addEventListener("click", () => {
-      setSwatch(colors.target, color);
-      closeColors();
-    });
-    return choice;
-  });
-  colors.hex = el("input", { type: "text", maxLength: 7, spellcheck: false, autocomplete: "off", placeholder: "#00aaff" });
-  colors.hex.addEventListener("input", () => {   // any other colour, as soon as it is complete
-    const color = colors.hex.value.trim().toLowerCase();
-    if (!/^#[0-9a-f]{6}$/.test(color)) return;
-    setSwatch(colors.target, color);
-    markColor(color);
-  });
-  colors.hex.addEventListener("keydown", (e) => { if (e.key === "Enter") closeColors(); });
-  colors.box = el("div", { className: "color-pop", hidden: true }, [
-    el("p", { className: "color-title" }),
-    el("div", { className: "color-presets" }, presets),
-    el("label", { className: "color-hex" }, [el("span", {}, "Other"), colors.hex]),
-  ]);
-  colors.box.setAttribute("role", "dialog");
-  document.body.append(colors.box);
-
-  document.addEventListener("pointerdown", (e) => {   // a press anywhere else closes it
-    if (colors.target && !colors.box.contains(e.target) && e.target !== colors.target) closeColors(false);
-  });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && colors.target) closeColors(); });
-  window.addEventListener("resize", () => { if (colors.target) closeColors(false); });
-}
-
-function markColor(color) {
-  for (const choice of colors.box.querySelectorAll(".color-presets button")) {
-    choice.setAttribute("aria-pressed", String(choice.value === color));
-  }
-}
-
-function openColors(button, name) {
-  if (colors.target === button) return closeColors();
-  if (colors.target) closeColors(false);
-  colors.target = button;
-  button.setAttribute("aria-expanded", "true");
-  const box = colors.box;
-  box.querySelector(".color-title").textContent = `Colour for ${name}`;
-  box.setAttribute("aria-label", `Colour for ${name}`);
-  colors.hex.value = button.value;
-  markColor(button.value);
-  box.hidden = false;
-
-  // Under the square, or above it when there is no room below; never off the side of the page.
-  const at = button.getBoundingClientRect();
-  const pageWidth = document.documentElement.clientWidth;
-  const left = Math.max(12, Math.min(at.left, pageWidth - box.offsetWidth - 12));
-  const below = at.bottom + 8 + box.offsetHeight <= window.innerHeight || at.top - 8 - box.offsetHeight < 0;
-  const top = below ? at.bottom + 8 : at.top - 8 - box.offsetHeight;
-  box.style.left = `${left + window.scrollX}px`;
-  box.style.top = `${top + window.scrollY}px`;
-  (box.querySelector('[aria-pressed="true"]') ?? colors.hex).focus({ preventScroll: true });
-}
-
-function closeColors(returnFocus = true) {
-  if (!colors.target) return;
-  colors.box.hidden = true;
-  colors.target.setAttribute("aria-expanded", "false");
-  if (returnFocus) colors.target.focus();
-  colors.target = null;
-}
-
 // ---------- settings ----------
+// The Settings panel is shared with the Living room page (settings.js). Here the settings decide
+// which gestures can be trained, the threshold on the gauge, and each gesture's colour.
 
-function actionEditor(action) {
-  const type = el("select", { className: "action-type", "aria-label": "Action" },
-    Object.entries(state.meta.action_types).map(([value, text]) => el("option", { value }, text)));
-  type.value = action.type;
-  const extra = el("div", { className: "action-extra" });
-  const renderExtra = () => {
-    const kind = type.value;
-    if (kind === "notify") {
-      extra.replaceChildren(el("input", { type: "text", className: "action-message", placeholder: "Message to show",
-        value: action.message ?? "", maxLength: 200, "aria-label": "Notification message" }));
-    } else if (kind === "webhook") {
-      extra.replaceChildren(el("input", { type: "url", className: "action-url", placeholder: "https://…",
-        value: action.url ?? "", "aria-label": "Web address" }));
-    } else if (kind === "home") {
-      const device = el("select", { className: "action-device", "aria-label": "Device in the living room" },
-        state.meta.home_devices.map((d) => el("option", { value: d.device }, d.name)));
-      device.value = action.device ?? state.meta.home_devices[0].device;
-      extra.replaceChildren(device);
-    } else {
-      extra.replaceChildren();
-    }
-  };
-  type.addEventListener("change", renderExtra);
-  renderExtra();
-  return el("div", { className: "action-cell" }, [type, extra]);
-}
-
-function renderConfig() {
-  const config = state.config;
-  $("threshold").value = config.dtw_threshold;
-  setSwatch($("unknown-color"), config.unknown_color);
-  if (!state.resultShown) showGauge(null, config.dtw_threshold);
-  $("gesture-rows").replaceChildren(...Object.entries(config.gestures).map(([label, settings]) => {
-    const remove = el("button", { type: "button", className: "text danger", "aria-label": `Remove ${label}` }, "Remove");
-    remove.addEventListener("click", () => {
-      state.config = readConfigForm();
-      delete state.config.gestures[label];
-      renderConfig();
-      toast(`Removed ${label}. Its samples stay in the dataset. Press Save settings to apply.`);
-    });
-    const row = el("li", { className: "gesture-item" }, [
-      swatchButton(settings.color, label, "gesture-color"),
-      el("span", { className: "gesture-name" }, label),
-      remove,
-      actionEditor(settings.action),
-    ]);
-    row.dataset.label = label;
-    return row;
-  }));
-
+function renderTrainOptions() {
   const select = $("train-label");
   const chosen = select.value;
-  select.replaceChildren(...Object.keys(config.gestures).map((label) => el("option", { value: label }, label)));
-  if (chosen in config.gestures) select.value = chosen;
+  select.replaceChildren(...Object.keys(state.config.gestures).map((label) => el("option", { value: label }, nameOf(label))));
+  if (chosen in state.config.gestures) select.value = chosen;
   if (state.status) renderStatus(state.status);
 }
 
-function readConfigForm() {
-  const gestures = {};
-  for (const row of $("gesture-rows").children) {
-    const type = row.querySelector(".action-type").value;
-    const action = { type };
-    if (type === "notify") action.message = row.querySelector(".action-message").value;
-    if (type === "webhook") action.url = row.querySelector(".action-url").value;
-    if (type === "home") action.device = row.querySelector(".action-device").value;
-    gestures[row.dataset.label] = { color: row.querySelector(".gesture-color").value, action };
-  }
-  return {
-    dtw_threshold: Number($("threshold").value),
-    unknown_color: $("unknown-color").value,
-    gestures,
-  };
-}
-
-function addGesture() {
-  const name = $("new-gesture").value.trim().toUpperCase().replace(/\s+/g, "_");
-  if (!/^[A-Z][A-Z0-9_]{0,15}$/.test(name) || name === "UNKNOWN") {
-    toast("Use 1–16 letters, digits or _, starting with a letter (not UNKNOWN).", true);
-    return;
-  }
-  state.config = readConfigForm();
-  if (name in state.config.gestures) {
-    toast(`${name} is already a gesture.`, true);
-    return;
-  }
-  state.config.gestures[name] = { color: NEW_GESTURE_COLOR, action: { type: "none" } };
-  $("new-gesture").value = "";
-  renderConfig();
-  $("gesture-rows").lastElementChild.classList.add("new");
-  toast(`Added ${name}. Press Save settings to keep it, then record some examples.`);
+function followConfig() {
+  renderTrainOptions();
+  if (!state.resultShown) showGauge(null, state.config.dtw_threshold);
+  renderSamples();
 }
 
 // ---------- dataset ----------
@@ -761,7 +570,7 @@ async function loadSamples() {
 function checkText(check) {
   if (!check) return ["", ""];
   if (check.nearest_label === null) return ["Only sample, nothing to compare with", "check-ok"];
-  if (check.nearest_label !== check.label) return [`Looks like ${check.nearest_label} (${fmt(check.distance)})`, "check-bad"];
+  if (check.nearest_label !== check.label) return [`Looks like ${nameOf(check.nearest_label)} (${fmt(check.distance)})`, "check-bad"];
   if (check.suspicious) return [`Far from the others (${fmt(check.distance)})`, "check-bad"];
   return [`OK (${fmt(check.distance)})`, "check-ok"];
 }
@@ -777,21 +586,22 @@ function renderSamples() {
         showStage(),
       ]);
       endLiveTrail();
-      drawTrail(detail, colorFor(detail.label), `${detail.label} sample recorded ${recordedAt(sample.sample_id)}`, true, true);
+      drawTrail(detail, colorFor(detail.label), `${nameOf(detail.label)} sample recorded ${recordedAt(sample.sample_id)}`, true, true);
       setSignals(detail.t, detail.accel, detail.gyro);
     }));
     const remove = el("button", { type: "button", className: "text danger" }, "Delete");
-    remove.addEventListener("click", () => attempt(async () => {
-      if (!confirm(`Delete this ${sample.label} sample? This can't be undone.`)) return;
-      await api("DELETE", `/api/samples/${encodeURIComponent(sample.sample_id)}`);
-      delete state.checks[sample.sample_id];
-      await loadSamples();
-      toast(`Deleted the ${sample.label} sample.`);
-    }));
+    remove.addEventListener("click", () => askFirst(
+      `Delete the ${nameOf(sample.label)} sample recorded ${recordedAt(sample.sample_id)}? This can't be undone.`,
+      "Delete sample", remove, async () => {
+        await api("DELETE", `/api/samples/${encodeURIComponent(sample.sample_id)}`);
+        delete state.checks[sample.sample_id];
+        await loadSamples();
+        toast(`Deleted the ${nameOf(sample.label)} sample.`);
+      }));
     return el("tr", { id: `sample-${sample.sample_id}` }, [
       el("td", {}, recordedAt(sample.sample_id)),
       el("td", { className: "gesture" }, [
-        el("span", { className: "swatch", style: `background:${colorFor(sample.label)}` }), " ", sample.label,
+        el("span", { className: "swatch", style: `background:${colorFor(sample.label)}` }), " ", nameOf(sample.label),
       ]),
       el("td", { className: "num" }, sample.n_samples),
       el("td", { className: "num" }, `${(sample.duration_ms / 1000).toFixed(2)} s`),
@@ -808,35 +618,47 @@ function plural(n, word) {
   return `${n} ${word}${n === 1 ? "" : "s"}`;
 }
 
-// Clear dataset asks first, in the panel itself. Nothing is deleted: app.py moves the files to
-// a dated folder in cleared/, beside the data folder, so they can be put back by hand.
-function askToClear() {
-  const count = plural(state.samples.length, "sample");
-  $("clear-question").textContent = `Clear all ${count}? Every gesture will need training again. `
-    + "The files are kept in the cleared folder, so they can be put back.";
-  $("clear-yes").textContent = `Clear ${count}`;
-  $("clear-confirm").hidden = false;
-  $("clear-no").focus();
+// Before something that cannot be taken back with a click (deleting a sample, clearing them all),
+// the panel asks: the question and two answers above the table. `from` gets the focus back.
+const asking = { action: null, from: null };
+
+function askFirst(question, yes, from, action) {
+  Object.assign(asking, { action, from });
+  $("confirm-question").textContent = question;
+  $("confirm-yes").textContent = yes;
+  $("dataset-confirm").hidden = false;
+  $("confirm-no").focus();
 }
 
-function cancelClear() {
-  $("clear-confirm").hidden = true;
-  $("clear-dataset").focus();
+function stopAsking() {
+  $("dataset-confirm").hidden = true;
+  if (asking.from?.isConnected) asking.from.focus();
+  Object.assign(asking, { action: null, from: null });
 }
 
-async function clearDataset() {
-  $("clear-yes").disabled = true;
+async function answerYes() {
+  $("confirm-yes").disabled = true;
   try {
-    const result = await api("POST", "/api/dataset/clear");
-    $("clear-confirm").hidden = true;
-    state.checks = {};
-    await loadSamples();
-    toast(`Cleared ${plural(result.moved, "sample")}. They are kept in ${result.folder}.`);
+    await asking.action();
+    stopAsking();
   } catch (error) {
     toast(error.message, true);
   } finally {
-    $("clear-yes").disabled = false;
+    $("confirm-yes").disabled = false;
   }
+}
+
+// Clearing moves the files to a dated folder in cleared/, beside the data folder, so they can be
+// put back by hand.
+function askToClear() {
+  const count = plural(state.samples.length, "sample");
+  askFirst(`Clear all ${count}? Every gesture will need training again. `
+    + "The files are kept in the cleared folder, so they can be put back.", `Clear ${count}`, $("clear-dataset"), async () => {
+    const result = await api("POST", "/api/dataset/clear");
+    state.checks = {};
+    await loadSamples();
+    toast(`Cleared ${plural(result.moved, "sample")}. They are kept in ${result.folder}.`);
+  });
 }
 
 // A narrow window makes the table scroll sideways. Its last column (View, Delete) stays in
@@ -896,11 +718,11 @@ function openEvents() {
   on("result", showResult);
   on("action", showAction);
   on("sample_saved", (data) => attempt(async () => {
-    toast(`Saved a ${data.label} example (${data.sample_count} samples).`);
+    toast(`Saved a ${nameOf(data.label)} example (${data.sample_count} samples).`);
     await loadSamples();
     document.getElementById(`sample-${data.sample_id}`)?.classList.add("new");  // its row lights up briefly
     const detail = await api("GET", `/api/samples/${encodeURIComponent(data.sample_id)}`);
-    drawTrail(detail, colorFor(data.label), `New ${data.label} example`, !endLiveTrail());
+    drawTrail(detail, colorFor(data.label), `New ${nameOf(data.label)} example`, !endLiveTrail());
     setSignals(detail.t, detail.accel, detail.gyro);
   }));
   on("message", (data) => toast(data.text, data.level === "warning"));
@@ -914,22 +736,20 @@ function wireButtons() {
   $("record-start").addEventListener("click", () =>
     attempt(() => api("POST", "/api/recording/start", { label: $("train-label").value })));
   $("record-stop").addEventListener("click", () => attempt(() => api("POST", "/api/recording/stop")));
-  buildColors();
-  $("unknown-color").addEventListener("click", () => openColors($("unknown-color"), "UNKNOWN"));
-  $("add-gesture").addEventListener("click", addGesture);
-  $("new-gesture").addEventListener("keydown", (e) => { if (e.key === "Enter") addGesture(); });
-  $("save-settings").addEventListener("click", () => attempt(async () => {
-    state.config = await api("PUT", "/api/config", readConfigForm());
-    renderConfig();
-    renderSamples();
-    toast("Settings saved.");
-  }));
   $("check-dataset").addEventListener("click", checkDataset);
   $("clear-dataset").addEventListener("click", askToClear);
-  $("clear-no").addEventListener("click", cancelClear);
-  $("clear-yes").addEventListener("click", clearDataset);
-  $("clear-confirm").addEventListener("keydown", (event) => {
-    if (event.key === "Escape") cancelClear();
+  $("confirm-yes").addEventListener("click", answerYes);
+  $("confirm-no").addEventListener("click", stopAsking);
+  $("dataset-confirm").addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.stopPropagation();   // only the question goes, not the panel
+      stopAsking();
+    }
+  });
+  // Saved settings (settings.js): which gestures, their colours, the threshold.
+  window.addEventListener("spellwand:config", (event) => {
+    state.config = event.detail;
+    followConfig();
   });
   $("train-label").addEventListener("change", renderTrainCount);
   $("replay").addEventListener("click", replayTrail);
@@ -942,7 +762,7 @@ async function start() {
   [state.meta, state.config] = await Promise.all([api("GET", "/api/meta"), api("GET", "/api/config")]);
   wireTheme();
   wireButtons();
-  renderConfig();
+  followConfig();
   setSignals([], [[], [], []], [[], [], []]);
   wireZoomButtons();
   drawTrail(null, null, "No casts yet. Hold the cast button and draw a gesture.");

@@ -1,0 +1,36 @@
+{# The Settings panel, on every page: how strict recognition is, and each gesture's colour and
+   action. It opens over the page from the top bar (static/shared.js); static/settings.js fills
+   it in and saves it. #}
+<aside id="settings-drawer" class="drawer" aria-labelledby="settings-heading" hidden>
+  <div class="drawer-head">
+    <h2 id="settings-heading">Recognition settings</h2>
+    <button type="button" class="drawer-close" data-close-drawer aria-label="Close settings">
+      <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+    </button>
+  </div>
+  <div class="drawer-body settings">
+    <div class="setting">
+      <label for="threshold">Rejection threshold</label>
+      <input id="threshold" type="number" step="0.05" min="0.05" title="A cast farther than this from every example counts as Unknown. Lower is stricter.">
+    </div>
+
+    <h3 id="gestures-heading">Gestures</h3>
+    <ul id="gesture-rows" class="gestures" aria-labelledby="gestures-heading"></ul>
+    <div class="gesture-item">
+      <button id="unknown-color" type="button" class="swatch-button" aria-label="Unknown colour" aria-haspopup="dialog"></button>
+      <span class="gesture-name" title="A cast that matches no gesture">Unknown</span>
+      <span class="no-action">No action</span>
+    </div>
+
+    <div class="row add-row">
+      <label class="field grow">
+        <span>New gesture</span>
+        <input id="new-gesture" placeholder="For example TRIANGLE" maxlength="16">
+      </label>
+      <button id="add-gesture" type="button" class="quiet">Add gesture</button>
+    </div>
+    <div class="save-row">
+      <button id="save-settings" type="button">Save settings</button>
+    </div>
+  </div>
+</aside>

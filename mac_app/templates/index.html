@@ -6,21 +6,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>Grimoire | SpellWand</title>
-<script>
-  // Choose the theme before the page paints: the saved choice, or else the system's.
-  (function () {
-    var saved = null;
-    try { saved = localStorage.getItem("spellwand-theme"); } catch (error) { /* private window */ }
-    var dark = saved ? saved === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
-    document.documentElement.dataset.theme = dark ? "dark" : "light";
-  })();
-</script>
+{% include "_theme.html" %}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400..800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 <script src="{{ url_for('static', filename='shared.js') }}" defer></script>
+<script src="{{ url_for('static', filename='settings.js') }}" defer></script>
 <script src="{{ url_for('static', filename='app.js') }}" defer></script>
 </head>
 <body{% if status.mode == "simulated" %} class="has-sim"{% endif %}>
@@ -33,7 +26,7 @@
 
 
 <main class="grid">
-  <figure class="stage">
+  <figure class="stage empty">
     <div id="trail" class="trail" role="img" aria-label="3D path of the wand tip during the last cast, seen from behind your hand"></div>
     <figcaption id="trail-caption" class="stage-caption">No casts yet. Hold the cast button and draw a gesture.</figcaption>
     <button id="replay" type="button" class="stage-button" disabled>
@@ -81,35 +74,24 @@
     </figure>
   </section>
 
-  <section class="panel dataset" aria-labelledby="dataset-heading">
-    <div class="panel-head">
-      <h2 id="dataset-heading"><span>Dataset</span></h2>
-      <div class="panel-actions">
-        <button id="check-dataset" type="button" class="quiet">Check dataset</button>
-        <button id="clear-dataset" type="button" class="quiet danger">Clear dataset</button>
-      </div>
-    </div>
-    <div id="clear-confirm" class="confirm" role="group" aria-labelledby="clear-question" hidden>
-      <p id="clear-question"></p>
-      <div class="confirm-buttons">
-        <button id="clear-yes" type="button" class="destroy"></button>
-        <button id="clear-no" type="button" class="quiet">Cancel</button>
-      </div>
-    </div>
-    <p id="dataset-summary" class="hint"></p>
-    <div class="table-frame">
-      <div class="table-scroll">
-        <table class="samples">
-          <thead><tr><th>Recorded</th><th>Gesture</th><th class="num">Samples</th><th class="num">Length</th><th>Check</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
-          <tbody id="sample-rows"></tbody>
-        </table>
-      </div>
-    </div>
-  </section>
+</main>
 
-  <div class="side">
-    <section class="panel" aria-labelledby="train-heading">
-      <h2 id="train-heading"><span>Train a gesture</span></h2>
+</div>
+
+{% include "_footer.html" %}
+
+{# The Dataset panel: record examples of a gesture, then look after them. It opens over the page
+   from the top bar, and leaves the motion view in sight, where View replays a sample. #}
+<aside id="dataset-drawer" class="drawer drawer-wide" aria-labelledby="dataset-drawer-heading" hidden>
+  <div class="drawer-head">
+    <h2 id="dataset-drawer-heading">Dataset</h2>
+    <button type="button" class="drawer-close" data-close-drawer aria-label="Close the dataset">
+      <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+    </button>
+  </div>
+  <div class="drawer-body dataset-body">
+    <section aria-labelledby="train-heading">
+      <h3 id="train-heading" class="section-title">Train a gesture</h3>
       <p class="hint">Pick a gesture, start recording, perform it once, then stop. You don't need to hold the cast button.</p>
       <div class="row">
         <label class="field grow">
@@ -125,41 +107,36 @@
       </div>
     </section>
 
-    <section class="panel settings" aria-labelledby="settings-heading">
-      <h2 id="settings-heading"><span>Recognition settings</span></h2>
-
-      <div class="setting">
-        <label for="threshold">Rejection threshold</label>
-        <input id="threshold" type="number" step="0.05" min="0.05" aria-describedby="threshold-help">
-        <p id="threshold-help" class="hint">A cast farther than this from every example counts as UNKNOWN. Lower is stricter.</p>
+    <section class="dataset" aria-labelledby="samples-heading">
+      <div class="section-head">
+        <h3 id="samples-heading">Samples</h3>
+        <div class="panel-actions">
+          <button id="check-dataset" type="button" class="quiet">Check dataset</button>
+          <button id="clear-dataset" type="button" class="quiet danger">Clear dataset</button>
+        </div>
       </div>
-
-      <h3 id="gestures-heading">Gestures</h3>
-      <p class="hint">The square is the colour the wand's light flashes. Below it: what the Mac does when the gesture is cast.</p>
-      <ul id="gesture-rows" class="gestures" aria-labelledby="gestures-heading"></ul>
-      <div class="gesture-item">
-        <button id="unknown-color" type="button" class="swatch-button" aria-label="UNKNOWN colour" aria-haspopup="dialog"></button>
-        <span class="gesture-name">UNKNOWN</span>
-        <p class="gesture-note">A cast that matches no gesture.</p>
+      {# Asks before deleting one sample or clearing them all. #}
+      <div id="dataset-confirm" class="confirm" role="group" aria-labelledby="confirm-question" hidden>
+        <p id="confirm-question"></p>
+        <div class="confirm-buttons">
+          <button id="confirm-yes" type="button" class="destroy"></button>
+          <button id="confirm-no" type="button" class="quiet">Cancel</button>
+        </div>
       </div>
-
-      <div class="row add-row">
-        <label class="field grow">
-          <span>New gesture</span>
-          <input id="new-gesture" placeholder="For example TRIANGLE" maxlength="16">
-        </label>
-        <button id="add-gesture" type="button" class="quiet">Add gesture</button>
-      </div>
-      <div class="save-row">
-        <button id="save-settings" type="button">Save settings</button>
+      <p id="dataset-summary" class="hint"></p>
+      <div class="table-frame">
+        <div class="table-scroll">
+          <table class="samples">
+            <thead><tr><th>Recorded</th><th>Gesture</th><th class="num">Samples</th><th class="num">Length</th><th>Check</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
+            <tbody id="sample-rows"></tbody>
+          </table>
+        </div>
       </div>
     </section>
   </div>
-</main>
-
-</div>
-
-{% include "_footer.html" %}
+</aside>
+{% include "_settings.html" %}
+{% include "_help.html" %}
 
 </body>
 </html>

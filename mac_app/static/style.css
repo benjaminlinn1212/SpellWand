@@ -13,6 +13,7 @@
 :root {
   --bg: #f5f5f7;            /* page */
   --surface: #ffffff;       /* panels, top bar */
+  --canvas: var(--surface); /* the page: one surface, its sections parted by space and rules */
   --float: #ffffff;         /* parts floating above the page: the simulated wand's toolbar */
   --float-edge: #d6d6dd;
   --field: #ffffff;         /* inputs */
@@ -111,7 +112,7 @@
 
 body {
   margin: 0;
-  background: var(--bg);
+  background: var(--canvas);
   color: var(--ink);
   font-family: var(--font);
   font-size: 1rem;
@@ -130,14 +131,15 @@ body {
 .page {
   max-width: var(--page);
   margin: 0 auto;
-  padding: var(--gap) 24px 40px;
+  padding: 28px 24px 56px;
 }
 
 h1, h2, h3, p, figure, dl, dd, ol, ul { margin: 0; }
 ol, ul { padding: 0; list-style: none; }
 
-/* A heading sits on a rule that runs across its panel. The piece of the rule under the words
-   is in the theme colour, the way the chosen tab of a folder is marked. */
+/* A section's name sits on a rule that runs across the section: the rule is what parts the
+   sections of the page. No accent: the theme colour is kept for the page you are on and for
+   what you can do. */
 h2 {
   display: flex;
   margin-bottom: 14px;
@@ -146,11 +148,7 @@ h2 {
   font-weight: 700;
   line-height: 1.3;
 }
-h2 > span {
-  margin-bottom: -1px;   /* onto the rule */
-  padding-bottom: 9px;
-  border-bottom: 2px solid var(--brand);
-}
+h2 > span { padding-bottom: 10px; }
 h3 { font-size: 0.9375rem; font-weight: 700; line-height: 1.3; }
 
 [hidden] { display: none !important; }
@@ -312,10 +310,7 @@ select {
 
 .panel {
   min-width: 0;
-  padding: 20px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-panel);
-  background: var(--surface);
+  /* a section of the page: no box of its own (see --canvas) */
 }
 
 /* ---------- the top bar ---------- */
@@ -333,7 +328,7 @@ select {
   align-items: center;
   gap: 12px 28px;
   max-width: var(--page);
-  min-height: 68px;
+  min-height: 64px;
   margin: 0 auto;
   padding: 0 24px;
 }
@@ -350,21 +345,20 @@ select {
   display: flex;
   align-items: center;
   margin-bottom: -1px;
-  padding: 3px 16px 0;
+  padding: 2px 16px 0;
   color: var(--ink-soft);
-  font-size: 1.125rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-size: 1rem;
+  font-weight: 650;
   text-decoration: none;
 }
 .pages a.under-mark,
 .pages:not(.has-mark) a[aria-current="page"] { color: var(--ink); }
 .pages:not(.has-mark) a[aria-current="page"],
-.tab-mark { background: var(--tint); box-shadow: inset 0 -3px 0 var(--brand); }
+.tab-mark { background: var(--tint); box-shadow: inset 0 -2px 0 var(--brand); }
 @media (hover: hover) {
   .pages a:not([aria-current]):hover {
     background: color-mix(in srgb, var(--line) 55%, transparent);
-    box-shadow: inset 0 -3px 0 var(--line-strong);
+    box-shadow: inset 0 -2px 0 var(--line-strong);
     color: var(--ink);
   }
 }
@@ -384,90 +378,139 @@ select {
 .status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-left: auto; color: var(--ink-soft); font-size: 0.8125rem; }
 .link { display: flex; align-items: center; gap: 8px; }
 .masthead-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.masthead-actions > button { min-height: 34px; }   /* as tall as the theme switch beside them */
+.masthead-actions > button { min-height: 32px; }   /* as tall as the theme switch beside them */
 
-/* Connection: hollow when off, filled when connected. */
+/* The wand's status: a dot and a phrase (shared.js). Hollow with no wand; green when ready; while
+   busy, the colour the wand's own light shows, with a ring spreading from it. */
 .dot {
+  --led: var(--good);
   flex: none;
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   border: 1.5px solid var(--line-strong);
   border-radius: 50%;
-  transition: background-color 0.2s, border-color 0.2s;
 }
-.dot.connected { background: var(--good); border-color: var(--good); }
-.dot.searching { background: var(--warn); border-color: var(--warn); animation: blink 0.7s ease-in-out infinite alternate; }
-
-/* The wand's state, with a lamp in the colour its status LED is showing. */
-.wand-state {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 2px 8px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r-mark);
-  color: var(--ink);
-  font-size: 0.8125rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-.wand-state::before {
-  content: "";
-  width: 10px;
-  height: 10px;
-  border: 1px solid var(--line-strong);
-  border-radius: 50%;
-  transition: background-color 0.15s;
-}
-.wand-state[data-state="OFFLINE"] { display: none; }   /* no wand, no state to show */
-.wand-state[data-state="IDLE"]::before { background: var(--led-idle); }
-.wand-state[data-state="CASTING"]::before {
-  --led: var(--led-casting);
-  background: var(--led);
-  border-color: var(--led);
-  animation: lamp 0.9s ease-out infinite;
-}
-.wand-state[data-state="INFLIGHT"]::before {
-  --led: var(--led-inflight);
-  background: var(--led);
-  border-color: var(--led);
-  animation: lamp 0.9s ease-out infinite;
-}
+.dot.ready, .dot.casting, .dot.waiting, .dot.searching { border: 0; background: var(--led); }
+.dot.casting { --led: var(--led-casting); animation: lamp 0.9s ease-out infinite; }
+.dot.waiting { --led: var(--led-inflight); animation: lamp 0.9s ease-out infinite; }
+.dot.searching { --led: var(--warn); animation: blink 0.7s ease-in-out infinite alternate; }
 @keyframes lamp {   /* a ring spreads from the lamp while the wand is busy */
   from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--led) 60%, transparent); }
   to { box-shadow: 0 0 0 7px transparent; }
 }
 
-/* Light or dark: the chosen one is in the theme colour. */
+/* The theme: the system's, light or dark, as three icons in a slim outline, after Geist's theme
+   switcher. The chosen one is shaded grey; the theme colour is kept for the page you are on and
+   the main actions. It is styled from the setting on the page (set before the page is drawn,
+   templates/_theme.html), so it is right from the first frame. 2px in from a 6px outline, the
+   buttons' corners are 4px. */
 .theme-switch {
   display: inline-flex;
-  margin-right: 8px;
-  padding: 3px;
+  gap: 2px;
+  margin-right: 4px;
+  padding: 2px;
   border-radius: var(--r-control);
-  box-shadow: inset 0 0 0 1px var(--line-strong);
+  box-shadow: inset 0 0 0 1px var(--line);
 }
 .theme-switch button {
   --base: transparent;
   --text: var(--ink-soft);
   --fill: var(--line);
   --on-fill: var(--ink);
+  width: 28px;
   min-height: 28px;
-  padding: 0 12px;
-  border-radius: calc(var(--r-control) - 3px);   /* inside the switch, 3px in from its edge */
+  padding: 0;
+  border-radius: calc(var(--r-control) - 2px);
+}
+:root[data-theme-setting="system"] .theme-switch [data-theme-choice="system"],
+:root[data-theme-setting="light"] .theme-switch [data-theme-choice="light"],
+:root[data-theme-setting="dark"] .theme-switch [data-theme-choice="dark"] {
+  --base: var(--line);
+  --text: var(--ink);
+  cursor: default;
+}
+
+/* ---------- panels over the page: Dataset, Settings ----------
+   They float on the right under the top bar, like the toolbar: the floating parts' colour, 12px
+   corners and a shadow. They leave the motion view in sight. The dataset's is wider, for its
+   table. Opening slides it in a little; that is the one movement here (shared.js opens them). */
+
+.drawer {
+  position: fixed;
+  top: 73px;                     /* under the top bar (64px and its rule), 8px clear of it */
+  right: 8px;
+  bottom: 8px;
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  width: min(460px, calc(100vw - 16px));
+  border: 1px solid var(--float-edge);
+  border-radius: var(--r-panel);
+  background: var(--float);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 16px 40px rgba(0, 0, 0, 0.16);
+  animation: drawer-in 0.18s ease-out 1;
+}
+.drawer-wide { width: min(660px, calc(100vw - 16px)); }
+@keyframes drawer-in { from { opacity: 0; transform: translateX(16px); } }
+.drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 12px 12px 20px;
+  border-bottom: 1px solid var(--float-edge);
+}
+.drawer-head h2 { margin: 0; border: 0; }
+.drawer-close {
+  --base: transparent;
+  --text: var(--ink-soft);
+  --fill: var(--line);
+  --on-fill: var(--ink);
+  width: 32px;
+  min-height: 32px;
+  padding: 0;
+}
+.drawer-body { flex: 1 1 auto; min-height: 0; padding: 20px; overflow: auto; }
+.dataset-body { display: flex; flex-direction: column; gap: 28px; overflow: hidden; }
+.dataset-body > section { flex: none; }
+.dataset-body > .dataset { flex: 1 1 auto; }
+.drawer .samples tbody tr, .drawer th { background: var(--float); }   /* the table on the panel's colour */
+
+/* The top bar's buttons for them: plain until pointed at; the open one is shaded. */
+button.ghost {
+  --base: transparent;
+  --text: var(--ink-soft);
+  --fill: var(--line);
+  --on-fill: var(--ink);
+  gap: 6px;
+  padding: 0 10px 0 8px;
+  font-weight: 600;
+}
+button.ghost[aria-expanded="true"] { --base: var(--line); --text: var(--ink); }
+button.ghost.icon-only { width: 32px; padding: 0; }
+
+/* Help: short sections of plain text, and the wand's lights in their colours. */
+.help { display: grid; gap: 24px; align-content: start; }
+.help p { margin: 0 0 8px; font-size: 0.9375rem; line-height: 1.55; }
+.help p:last-child { margin-bottom: 0; }
+.help b { font-weight: 650; }
+.help kbd {
+  padding: 1px 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-mark);
+  font: inherit;
   font-size: 0.8125rem;
   font-weight: 600;
 }
-/* The chosen theme, styled from the page's own theme (set before it is drawn, in the template's
-   head) rather than from aria-pressed (set later by the script), so it is right from the first
-   frame and does not light up as each page opens. */
-:root[data-theme="light"] .theme-switch [data-theme-choice="light"],
-:root[data-theme="dark"] .theme-switch [data-theme-choice="dark"] {
-  --base: var(--brand);
-  --text: var(--on-brand);
-  --fill: var(--brand);
-  --on-fill: var(--on-brand);
-  cursor: default;
-}
+.lights { display: grid; gap: 6px; font-size: 0.9375rem; }
+.lights li { display: flex; align-items: center; gap: 10px; }
+.light { flex: none; width: 12px; height: 12px; border-radius: 50%; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 25%, transparent); }
+.light.idle { background: var(--led-idle); }
+.light.casting { background: var(--led-casting); }
+.light.inflight { background: var(--led-inflight); }
+.light.recognised { background: conic-gradient(#0050ff 0 33%, #00c828 0 66%, #ff4000 0); }
+.light.unknown { background: #ff0000; }
+.light.no-answer { background: #ff00ff; }
 
 /* ---------- the simulated wand's toolbar: floating at the bottom of every page ----------
    A floating part, so it has the panels' 12px corners, a shadow, and 6px of padding that sets
@@ -476,7 +519,7 @@ select {
 
 .sim-dock {
   position: fixed;
-  left: 50%;
+  left: calc((100% - var(--drawer-space, 0px)) / 2);   /* left of an open panel, if there is one */
   bottom: 16px;
   z-index: 15;
   display: flex;
@@ -515,8 +558,8 @@ body.has-sim { padding-bottom: 72px; }   /* so the end of the page can scroll cl
 
 .grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 420px;
-  gap: var(--gap);
+  grid-template-columns: minmax(0, 1fr) 400px;
+  gap: 48px 40px;
 }
 
 .stage {
@@ -528,6 +571,19 @@ body.has-sim { padding-bottom: 72px; }   /* so the end of the page can scroll cl
   overflow: hidden;
 }
 .trail { height: 100%; }
+/* Before any cast: the room is faint and what to do sits in the middle (app.js marks .empty). */
+.stage.empty .trail { opacity: 0.45; }
+.stage.empty .stage-caption {
+  inset: 50% auto auto 50%;
+  max-width: calc(100% - 64px);
+  padding: 10px 16px;
+  border-radius: var(--r-block);
+  background: var(--stage);   /* lifts the words off the grid lines behind them */
+  color: var(--ink-soft);
+  font-size: 1rem;
+  text-align: center;
+  transform: translate(-50%, -50%);
+}
 .stage-caption {
   position: absolute;
   left: 20px;
@@ -568,7 +624,7 @@ body.has-sim { padding-bottom: 72px; }   /* so the end of the page can scroll cl
   overflow: hidden;
 }
 .result > * { flex: none; }
-.result h2:not(:first-child) { margin-top: 18px; }
+.result h2:not(:first-child) { margin-top: 32px; }
 
 /* The name sits on the spell's own colour (app.js sets --spell and --on-spell). */
 .verdict {
@@ -671,7 +727,7 @@ body.has-sim { padding-bottom: 72px; }   /* so the end of the page can scroll cl
 .history li:last-child { border-bottom: 0; }
 .history li.new { animation: row-in 0.25s ease-out 1; }   /* the newest cast drops in */
 @keyframes row-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
-.history .name { font-weight: 600; letter-spacing: 0.01em; overflow-wrap: anywhere; }
+.history .name { font-weight: 600; overflow-wrap: anywhere; }
 .history .distance { margin-left: auto; color: var(--ink-soft); }
 .history .none { color: var(--ink-soft); }
 
@@ -686,20 +742,23 @@ td .swatch { margin-right: 4px; }
 }
 
 /* The two sensor charts, across the whole width. */
-.signals { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gap); }
-.signal { position: relative; padding: 16px 16px 8px; }
+.signals { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 40px; }
+.signal { position: relative; }
 /* On a chart that is zoomed in: back to the whole cast. It sits beside the chart's name. */
-.zoom-out { position: absolute; top: 11px; right: 16px; min-height: 30px; padding: 0 10px; font-size: 0.8125rem; }
-.signal figcaption { font-size: 0.875rem; font-weight: 700; }
+.zoom-out { position: absolute; top: -4px; right: 0; min-height: 28px; padding: 0 10px; font-size: 0.8125rem; }
+/* A chart's name is a section name like the others (see h2). */
+.signal figcaption { margin-bottom: 4px; padding-bottom: 10px; border-bottom: 1px solid var(--line); font-size: 1.0625rem; font-weight: 700; line-height: 1.3; }
 .chart { height: 230px; }
 
-/* The dataset: as tall as training and settings beside it; its table scrolls inside the frame. */
-.dataset { display: flex; flex-direction: column; }
+/* The dataset, in its panel: it fills what training leaves of the panel; its table scrolls inside. */
+.dataset { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
 .dataset > * { flex: none; }
 /* The heading and its button share the rule under them. */
-.panel-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 14px; border-bottom: 1px solid var(--line); }
-.panel-head h2 { margin-bottom: 0; border-bottom: 0; }
-.panel-head button { min-height: var(--control-small); margin-bottom: 8px; }
+/* A section inside a panel: its name (and its buttons) on a rule, like the page's sections. */
+.section-title, .section-head { margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.section-title, .section-head h3 { font-size: 0.9375rem; font-weight: 700; line-height: 1.3; }
+.section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 8px; }
+.section-head button { min-height: var(--control-small); }
 .panel-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 
 /* Asking before something that cannot be taken back with a click: a red mark at its start,
@@ -719,10 +778,9 @@ td .swatch { margin-right: 4px; }
 .confirm p { flex: 1 1 280px; margin: 0; font-size: 0.9375rem; }
 .confirm-buttons { display: flex; gap: 8px; }
 .confirm button { min-height: var(--control-small); }
-.dataset .table-frame { position: relative; flex: 1 1 auto; min-height: 320px; }
+.dataset .table-frame { position: relative; flex: 1 1 auto; min-height: 200px; }
 .table-scroll { position: absolute; inset: 0; overflow: auto; }
 
-.side { display: grid; gap: var(--gap); align-content: start; min-width: 0; }
 .train-notes { min-height: 3.4em; }   /* room for both notes, so they come and go without moving anything */
 .train-notes .hint { margin: 0 0 4px; }
 
@@ -757,7 +815,7 @@ th:last-child, td:last-child { padding-right: 0; }
 .samples tbody tr.new { animation: row-flash 1.4s ease-out 1; }   /* a sample that was just recorded */
 @keyframes row-flash { from { background: var(--tint); } }
 .num { text-align: right; }
-.samples .gesture { font-weight: 600; letter-spacing: 0.01em; white-space: nowrap; }
+.samples .gesture { font-weight: 600; white-space: nowrap; }
 .samples td.check-ok { color: var(--ink-soft); }
 .samples td.check-bad { color: var(--warn); font-weight: 600; }
 .samples .actions { white-space: nowrap; text-align: right; }
@@ -765,32 +823,42 @@ th:last-child, td:last-child { padding-right: 0; }
 
 /* ---------- settings ---------- */
 
-/* One setting: its name and what it means on the left, its value on the right. */
-.setting { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 20px; align-items: start; }
-.setting label { align-self: end; font-size: 0.9375rem; font-weight: 700; }
-.setting input { grid-column: 2; grid-row: 1 / span 2; width: 96px; }
-.setting .hint { grid-column: 1; margin: 0; font-size: 0.875rem; }
+/* One setting: its name on the left, its value on the right. */
+.setting { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.setting label { font-size: 0.9375rem; font-weight: 700; }
+.setting input { width: 96px; }
 
-.settings h3 { margin-top: 24px; }
-.settings h3 + .hint { margin: 2px 0 12px; font-size: 0.875rem; }
+.settings h3 { margin: 28px 0 8px; }
 
-/* Each gesture is one block on a two-column grid: its colour square, then everything else in
-   line with its name: the name and Remove, and under them what the Mac does when it is cast. */
+/* One gesture per line: its LED colour, its name, what it does (one menu), and a button to
+   remove it. A second line, under the name, only when the action needs words. Unknown sits in
+   the same columns. */
 .gestures { border-top: 1px solid var(--line); }
 .gesture-item {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) auto;
+  grid-template-columns: 24px minmax(0, 1fr) minmax(0, 196px) 32px;
   gap: 8px 12px;
   align-items: center;
-  padding: 12px 0;
+  padding: 10px 0;
   border-bottom: 1px solid var(--line);
 }
 .gesture-item.new { animation: row-flash 1.4s ease-out 1; }   /* a gesture that was just added */
-.gesture-name { font-weight: 700; letter-spacing: 0.01em; overflow-wrap: anywhere; }
-.gesture-item .action-cell, .gesture-note { grid-column: 2 / -1; }
-.gesture-note { margin-top: -6px; color: var(--ink-soft); font-size: 0.875rem; }
-.action-cell { display: grid; grid-template-columns: 168px minmax(0, 1fr); gap: 8px; }
-.action-cell select, .action-cell input { width: 100%; font-size: 0.9375rem; }
+.gesture-item .swatch-button { width: 24px; min-height: 24px; border-radius: var(--r-mark); }
+.gesture-name { font-weight: 700; overflow-wrap: anywhere; }
+.gesture-item .action-type { width: 100%; font-size: 0.875rem; }
+.gesture-item .action-extra { grid-column: 2 / -1; }
+.gesture-item .action-extra:empty { display: none; }
+.gesture-item .action-extra input { width: 100%; font-size: 0.875rem; }
+.gesture-item .no-action { grid-column: 3 / -1; padding-left: 13px; color: var(--ink-soft); font-size: 0.875rem; }
+.remove-gesture {
+  --base: transparent;
+  --text: var(--ink-soft);
+  --fill: color-mix(in srgb, var(--bad) 12%, transparent);
+  --on-fill: var(--bad);
+  width: 32px;
+  min-height: 32px;
+  padding: 0;
+}
 
 .add-row { margin: 16px 0 0; }
 .save-row { margin-top: 20px; }
@@ -873,6 +941,7 @@ th:last-child, td:last-child { padding-right: 0; }
 
 @media (max-width: 1000px) {
   .masthead { position: static; }
+  .drawer { top: 8px; }   /* the top bar scrolls away here, so the panels use the full height */
   .masthead-inner { gap: 10px 16px; min-height: 0; padding: 12px 16px; }
   .pages { flex-basis: 100%; align-self: auto; padding-top: 0; }
   .pages a { min-height: 44px; margin-bottom: 0; }   /* the header wraps here, so the line sits under the words */
@@ -886,8 +955,6 @@ th:last-child, td:last-child { padding-right: 0; }
   .result { height: auto; }
   .result .history { flex: none; max-height: 232px; }
   .signals { grid-column: auto; }
-  .dataset { order: 1; }
-  .dataset .table-frame { flex: none; height: 380px; }
 }
 
 @media (max-width: 620px) {
@@ -900,11 +967,12 @@ th:last-child, td:last-child { padding-right: 0; }
   .sim-move { flex-direction: column; gap: 3px; min-height: 48px; padding: 4px 6px; font-size: 0.6875rem; }
   body.has-sim { padding-bottom: 76px; }
   .has-sim .toast { bottom: 76px; }
-  .panel { padding: 16px; }
-  .gesture-item .action-cell { grid-column: 1 / -1; }
-  .setting label { align-self: center; }
-  .setting input { grid-row: 1; }
-  .setting .hint { grid-column: 1 / -1; margin-top: 4px; }
+
+  /* The menu moves under the name. */
+  .gesture-item { grid-template-columns: 24px minmax(0, 1fr) 32px; }
+  .gesture-item .action-type { grid-column: 2 / -1; grid-row: 2; }
+  .gesture-item .remove-gesture { grid-column: 3; grid-row: 1; }
+  .gesture-item .no-action { grid-column: 2 / -1; padding-left: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,0 +1,60 @@
+{# The Help panel, on every page: how to use Grimoire, in short. It opens from the ? in the top
+   bar (static/shared.js). The wand's light colours are the firmware's
+   (firmware/lib/wand_core/wand_state.h); keep them in step. #}
+<aside id="help-drawer" class="drawer" aria-labelledby="help-heading" hidden>
+  <div class="drawer-head">
+    <h2 id="help-heading">Help</h2>
+    <button type="button" class="drawer-close" data-close-drawer aria-label="Close help">
+      <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+    </button>
+  </div>
+  <div class="drawer-body help">
+    <section>
+      <h3 class="section-title">Getting started</h3>
+      <p>Turn the wand on and press <b>Connect wand</b>. The Mac looks for it over Bluetooth for up to 10 seconds.</p>
+      <p>To try Grimoire without the wand, press <b>Use simulated wand</b>. A toolbar at the bottom of the page then casts for you.</p>
+    </section>
+
+    <section>
+      <h3 class="section-title">Casting</h3>
+      <p>Hold the cast button, draw a gesture in the air, and let go. A cast lasts at most 3 seconds. The 3D view draws the path of the wand's tip as you move, seen from behind your hand.</p>
+      <p>The wand's light tells you where it is:</p>
+      <ul class="lights">
+        <li><span class="light idle"></span>Dim white: ready</li>
+        <li><span class="light casting"></span>Blue: casting</li>
+        <li><span class="light inflight"></span>Amber: waiting for the Mac's answer</li>
+        <li><span class="light recognised"></span>The gesture's own colour for a second: recognised</li>
+        <li><span class="light unknown"></span>Three flashes: Unknown, the cast matched no gesture</li>
+        <li><span class="light no-answer"></span>Two magenta flashes: no answer from the Mac</li>
+      </ul>
+    </section>
+
+    <section>
+      <h3 class="section-title">Reading a result</h3>
+      <p>The name is the gesture whose examples the cast came closest to. The bar under it shows how close: the mark is the cast's distance, the line is the rejection threshold. A cast beyond the line counts as Unknown.</p>
+      <p>The two charts show what the wand measured during the cast. Drag across one to zoom in; double-click it to zoom back out.</p>
+    </section>
+
+    <section>
+      <h3 class="section-title">Training a gesture</h3>
+      <p>Open <b>Dataset</b>. Pick a gesture, press <b>Start recording</b>, perform the gesture once, then press <b>Stop and save</b>. A recording stops by itself after 5 seconds.</p>
+      <p>Record five or more examples of each gesture, made the way you will cast it. <b>Check dataset</b> compares each example with all the others and points out the ones that look like another gesture; delete those. <b>Clear dataset</b> starts over, and keeps the files in the cleared folder.</p>
+    </section>
+
+    <section>
+      <h3 class="section-title">Settings</h3>
+      <p>The <b>rejection threshold</b> is how far a cast may be from its nearest example and still count. Lower is stricter: fewer wrong answers, more Unknown.</p>
+      <p>Each gesture's square is the colour the wand flashes for it. Its menu is what the Mac does: show a notification, send a web request, or switch something in the living room. Add a gesture by its name, then record examples of it. <b>Save settings</b> to apply.</p>
+    </section>
+
+    <section>
+      <h3 class="section-title">Living room</h3>
+      <p>A room to try gestures on. In Settings, choose <b>Switch the lamp</b>, or the door, TV or curtains, for a gesture. Casting it then switches that device. Press a device to switch it by hand. Each time the app starts, the room starts with everything off and closed.</p>
+    </section>
+
+    <section>
+      <h3 class="section-title">Keys</h3>
+      <p><kbd>Esc</kbd> closes a panel, or a question in one.</p>
+    </section>
+  </div>
+</aside>

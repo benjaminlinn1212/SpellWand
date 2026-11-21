@@ -131,8 +131,9 @@ class AppTest(unittest.TestCase):
         # so the top bar does not change as the page opens, or between the two pages
         for url in ("/", "/living-room"):
             html = self.client.get(url).get_data(as_text=True)
-            self.assertIn('<span id="link-text">Simulated wand connected</span>', html)
-            self.assertRegex(html, r'id="wand-state"[^>]*data-state="IDLE"[^>]*>IDLE</span>')
+            # one status: a dot and a phrase, saying both the connection and the wand's state
+            self.assertIn('<span id="link-dot" class="dot ready"></span><span id="link-text">Simulated wand ready</span>', html)
+            self.assertNotIn('id="wand-state"', html)
             self.assertIn('<button id="connect-ble" type="button" hidden>', html)
             self.assertIn('<button id="disconnect" type="button" class="quiet">', html)
         for url in ("/", "/living-room"):   # the simulated wand's motions, ready to press, on both pages
@@ -143,10 +144,28 @@ class AppTest(unittest.TestCase):
             self.assertRegex(html, r'data-motion="STILL" title="Hold it still[^"]*"[^>]*>\s*<svg[^>]*>.*?</svg>\s*<span class="sim-name">Still</span>')
         self.post("/api/disconnect")
         html = self.client.get("/").get_data(as_text=True)
-        self.assertIn('<span id="link-text">No wand connected</span>', html)
+        self.assertIn('<span id="link-dot" class="dot"></span><span id="link-text">No wand connected</span>', html)
         self.assertIn('<button id="disconnect" type="button" class="quiet" hidden>', html)
         self.assertIn('<body>', html)
         self.assertRegex(html, r'<div id="sim-panel" class="sim-dock" role="toolbar"[^>]* hidden>')
+
+    def test_dataset_and_settings_open_in_panels(self):
+        grimoire = self.client.get("/").get_data(as_text=True)
+        living_room = self.client.get("/living-room").get_data(as_text=True)
+        for html in (grimoire, living_room):   # the same two buttons in the top bar on both pages
+            self.assertIn('data-drawer="dataset-drawer" data-drawer-page="/"', html)
+            self.assertIn('data-drawer="settings-drawer"', html)
+            self.assertIn('id="settings-drawer"', html)   # settings work on both pages
+            self.assertIn('id="save-settings"', html)
+            self.assertIn('data-drawer="help-drawer"', html)   # and help, on both pages
+            self.assertIn('id="help-drawer"', html)
+        # the dataset panel replays samples in the motion view, so it is on the Grimoire page only
+        self.assertIn('id="dataset-drawer"', grimoire)
+        self.assertNotIn('id="dataset-drawer"', living_room)
+        # nothing of it is left on the page itself
+        main = grimoire[grimoire.index('<main class="grid">'):grimoire.index("</main>")]
+        self.assertNotIn("sample-rows", main)
+        self.assertNotIn("record-start", main)
 
     def test_living_room_arrives_drawn_as_it_is(self):
         self.post("/api/home", {"device": "lamp"})

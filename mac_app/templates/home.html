@@ -6,21 +6,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>Living room | Grimoire</title>
-<script>
-  // Choose the theme before the page paints: the saved choice, or else the system's.
-  (function () {
-    var saved = null;
-    try { saved = localStorage.getItem("spellwand-theme"); } catch (error) { /* private window */ }
-    var dark = saved ? saved === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
-    document.documentElement.dataset.theme = dark ? "dark" : "light";
-  })();
-</script>
+{% include "_theme.html" %}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400..800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='home.css') }}">
 <script src="{{ url_for('static', filename='shared.js') }}" defer></script>
+<script src="{{ url_for('static', filename='settings.js') }}" defer></script>
 <script src="{{ url_for('static', filename='home.js') }}" defer></script>
 </head>
 <body{% if status.mode == "simulated" %} class="has-sim"{% endif %}>
@@ -120,5 +113,7 @@
 </main>
 
 {% include "_footer.html" %}
+{% include "_settings.html" %}
+{% include "_help.html" %}
 </body>
 </html>

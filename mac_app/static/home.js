@@ -27,29 +27,6 @@ function el(tag, props = {}, children = []) {
   return node;
 }
 
-// ---------- theme (the same choice as the Wand page) ----------
-
-function showThemeChoice() {
-  const theme = document.documentElement.dataset.theme;
-  for (const button of document.querySelectorAll("[data-theme-choice]")) {
-    button.setAttribute("aria-pressed", String(button.dataset.themeChoice === theme));
-  }
-}
-
-function wireTheme() {
-  for (const button of document.querySelectorAll("[data-theme-choice]")) {
-    button.addEventListener("click", () => {
-      const root = document.documentElement;
-      root.classList.add("theme-fade");
-      setTimeout(() => root.classList.remove("theme-fade"), 300);
-      root.dataset.theme = button.dataset.themeChoice;
-      try { localStorage.setItem("spellwand-theme", button.dataset.themeChoice); } catch (error) { /* private window */ }
-      showThemeChoice();
-    });
-  }
-  showThemeChoice();
-}
-
 // ---------- the devices ----------
 
 function device(id) {
@@ -102,7 +79,7 @@ function showGestures() {
     line.replaceChildren(...(gestures.length
       ? gestures.flatMap(([label, settings], i) => [
         ...(i ? [" or "] : []),
-        el("span", { className: "swatch", style: `background:${settings.color}` }), label])
+        el("span", { className: "swatch", style: `background:${settings.color}` }), Shared.gestureName(label)])
       : ["No gesture yet"]));
   }
 }
@@ -177,14 +154,14 @@ function openEvents() {
     const data = JSON.parse(event.data);
     render(data.devices, data.changed);
     const did = whatHappened(data.changed, data.devices[data.changed]);
-    caption(data.by ? `${data.by} ${did}.` : `You ${did}.`);
+    caption(data.by ? `${Shared.gestureName(data.by)} ${did}.` : `You ${did}.`);
   });
   events.addEventListener("result", async (event) => {
     const result = JSON.parse(event.data);
     await refreshConfig().catch(() => {});  // the gestures may have been changed on the Wand page
     const action = state.config?.gestures[result.label]?.action;
     if (result.label === "UNKNOWN") caption("That cast matched no gesture.");
-    else if (action?.type !== "home") caption(`${result.label} isn't linked to anything in this room.`);
+    else if (action?.type !== "home") caption(`${Shared.gestureName(result.label)} isn't linked to anything in this room.`);
     // a gesture linked to a device is described by the "home" event that follows
   });
   events.onerror = () => Shared.lostContact();
@@ -192,12 +169,16 @@ function openEvents() {
 }
 
 async function start() {
-  wireTheme();
   const [meta, config, home] = await Promise.all([api("GET", "/api/meta"), api("GET", "/api/config"), api("GET", "/api/home")]);
   Object.assign(state, { meta, config });
   buildDevices();
   showRoom(home.devices);
   listen();
+  // Saved settings (settings.js, from the top bar): which gesture switches which device.
+  window.addEventListener("spellwand:config", (event) => {
+    state.config = event.detail;
+    showGestures();
+  });
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") refreshConfig().catch(() => {});
   });

@@ -1,0 +1,13 @@
+{# Chooses the theme before the page is drawn, so it never flashes the other one: the saved
+   setting (light or dark), or else the system's. data-theme is what the page shows;
+   data-theme-setting is what the switch in the top bar shows as chosen (static/shared.js). #}
+<script>
+  (function () {
+    var saved = null;
+    try { saved = localStorage.getItem("spellwand-theme"); } catch (error) { /* private window */ }
+    var setting = saved === "light" || saved === "dark" ? saved : "system";
+    var dark = setting === "system" ? window.matchMedia("(prefers-color-scheme: dark)").matches : setting === "dark";
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
+    document.documentElement.dataset.themeSetting = setting;
+  })();
+</script>
