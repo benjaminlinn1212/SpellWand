@@ -8,17 +8,17 @@
   --sky: #d9e6f3;
   --sun: #ffcf5a;
   --cloth: #e9e5dd;
-  --opening: #dcdce2;
-  --screen-off: #232329;
+  --opening: #dddaea;
+  --screen-off: #211e38;
   --glow: #ffc247;
   --shade-on: #ffd98a;
 }
 :root[data-theme="dark"] {
   --sky: #1c2335;
   --sun: #e6e6ee;          /* the moon */
-  --cloth: #2c2a30;
-  --opening: #050507;
-  --screen-off: #050507;
+  --cloth: #2a2640;
+  --opening: #07061a;
+  --screen-off: #07061a;
   --glow: #ffb938;
   --shade-on: #ffcb6b;
 }

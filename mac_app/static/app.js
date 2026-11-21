@@ -474,7 +474,7 @@ function renderDatasetSummary(counts) {
 
 // Black or white, whichever is easier to read on this colour ("#rrggbb").
 function textOn(color) {
-  return luminance(color) > 0.179 ? "#16161a" : "#ffffff";
+  return luminance(color) > 0.179 ? "#1d1a36" : "#ffffff";
 }
 
 // The spell's name stays on one line: a long name gets smaller letters.
