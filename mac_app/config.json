@@ -1,25 +1,33 @@
 {
-  "dtw_threshold": 1.5,
+  "dtw_threshold": 1.7,
   "unknown_color": "#ff0000",
   "gestures": {
     "CIRCLE": {
       "color": "#0050ff",
       "action": {
-        "type": "notify",
-        "message": "Circle cast!"
+        "type": "home",
+        "device": "door"
       }
     },
     "HORIZONTAL_LINE": {
       "color": "#00c828",
       "action": {
-        "type": "none"
+        "type": "home",
+        "device": "curtains"
       }
     },
     "ZIGZAG": {
-      "color": "#ff4000",
+      "color": "#b48cff",
       "action": {
-        "type": "notify",
-        "message": "Zigzag cast!"
+        "type": "home",
+        "device": "tv"
+      }
+    },
+    "TRIANGLE": {
+      "color": "#00d6a0",
+      "action": {
+        "type": "home",
+        "device": "lamp"
       }
     }
   }
