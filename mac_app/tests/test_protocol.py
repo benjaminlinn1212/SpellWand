@@ -27,8 +27,7 @@ class ExampleBytesTest(unittest.TestCase):
     def test_commands_encode_to_the_documented_bytes(self):
         self.assertEqual(encode_start_recording(), bytes.fromhex("81"))
         self.assertEqual(encode_stop_recording(), bytes.fromhex("82"))
-        self.assertEqual(encode_gesture_result("CIRCLE", (0, 80, 255)),
-                         bytes.fromhex("83 00 50 ff 43 49 52 43 4c 45"))
+        self.assertEqual(encode_gesture_result("CIRCLE"), bytes.fromhex("83 43 49 52 43 4c 45"))
         self.assertEqual(encode_execute_action(1), bytes.fromhex("84 01"))
 
     def test_documented_event_bytes_decode(self):
@@ -43,15 +42,14 @@ class ExampleBytesTest(unittest.TestCase):
     def test_documented_command_bytes_decode(self):
         self.assertEqual(decode_command(bytes.fromhex("81")), StartRecording())
         self.assertEqual(decode_command(bytes.fromhex("82")), StopRecording())
-        self.assertEqual(decode_command(bytes.fromhex("83 00 50 ff 43 49 52 43 4c 45")),
-                         GestureResult(label="CIRCLE", rgb=(0, 80, 255)))
+        self.assertEqual(decode_command(bytes.fromhex("83 43 49 52 43 4c 45")), GestureResult(label="CIRCLE"))
         self.assertEqual(decode_command(bytes.fromhex("84 01")), ExecuteAction(action=1))
 
 
 class EncodingLimitsTest(unittest.TestCase):
     def test_every_message_fits_in_one_ble_packet(self):
         longest_label = "A" * 16
-        self.assertLessEqual(len(encode_gesture_result(longest_label, (1, 2, 3))), 20)
+        self.assertLessEqual(len(encode_gesture_result(longest_label)), 20)
         self.assertLessEqual(len(encode_motion_sample(SAMPLE)), 20)
 
     def test_out_of_range_readings_are_clamped_not_wrapped(self):
@@ -66,7 +64,13 @@ class EncodingLimitsTest(unittest.TestCase):
         for bad in ("", "A" * 17, "CÍRCULO"):
             with self.subTest(label=bad):
                 with self.assertRaises(ValueError):
-                    encode_gesture_result(bad, (0, 0, 0))
+                    encode_gesture_result(bad)
+
+    def test_gesture_result_is_the_label_alone_2_to_17_bytes(self):
+        self.assertEqual(encode_gesture_result("A"), bytes.fromhex("83 41"))
+        self.assertEqual(len(encode_gesture_result("A" * 16)), 17)
+        self.assertEqual(decode_command(bytes.fromhex("83 41")), GestureResult(label="A"))
+        self.assertEqual(decode_command(b"\x83" + b"A" * 16), GestureResult(label="A" * 16))
 
 
 class MalformedInputTest(unittest.TestCase):
@@ -77,7 +81,13 @@ class MalformedInputTest(unittest.TestCase):
                     decode_event(data)
 
     def test_malformed_commands_raise_protocol_error(self):
-        for data in (b"", bytes.fromhex("83 00 50"), bytes.fromhex("84"), bytes.fromhex("01 00")):
+        for data in (b"", bytes.fromhex("84"), bytes.fromhex("01 00")):
+            with self.subTest(data=data.hex()):
+                with self.assertRaises(ProtocolError):
+                    decode_command(data)
+
+    def test_gesture_result_needs_a_label_of_1_to_16_ascii_characters(self):
+        for data in (bytes.fromhex("83"), b"\x83" + b"A" * 17, bytes.fromhex("83 43 cd 52")):
             with self.subTest(data=data.hex()):
                 with self.assertRaises(ProtocolError):
                     decode_command(data)

@@ -3,7 +3,7 @@
 A handheld wand that recognizes air-drawn gestures and uses them to control devices.
 
 - `firmware/`: ESP32 firmware (PlatformIO + Arduino). Reads the `IMU`, handles `CAST_BUTTON`,
-  runs the `IDLE` / `CASTING` / `INFLIGHT` state machine, drives `STATUS_LED`, talks to the Mac over `BLE_LINK`.
+  runs the `IDLE` / `CASTING` / `INFLIGHT` state machine and talks to the Mac over `BLE_LINK`.
 - `mac_app/`: Mac-side Python app (Flask + Bleak): `SpellWand UI`, `BLE Manager`, `Sample Recorder`,
   `Gesture Classifier` (DTW with rejection), `Action Dispatcher`.
 - `docs/protocol.md`: the `BLE_LINK` message format. `docs/prior-work.md`: how other gesture wands work.
@@ -33,35 +33,27 @@ real data in `mac_app/data/` and `mac_app/config.json` are never touched. Delete
 | IMU pins left open | BOOT, and ADO/ADDR if your board has it: the firmware tries address 0x4B, then 0x4A |
 | IMU mounting | z axis along the wand toward the tip; with the wand held level, y axis up and x axis to the left. The firmware turns every reading into the wand's own axes (x toward the tip, y left, z up), which the Mac app expects. Mounted another way? Change `toWandAxes()` in `firmware/lib/wand_core/wand_axes.h` |
 | `CAST_BUTTON` | GPIO 27 → button → GND (internal pull-up) |
-| `STATUS_LED` (4-leg RGB LED) | GPIO 18 → 220 Ω → red leg; GPIO 19 → 68–100 Ω → green leg; GPIO 23 → 68–100 Ω → blue leg; long (common) leg → ESP32 3V3 (common anode LED) |
-| Power: 4× AAA holder with switch | + → ESP32 **5V/VIN** pin; − → ESP32 GND (see Power below) |
+| Power | The dev board's USB port, from the Mac (see Power below). Nothing connects to **5V/VIN** |
 
-**RGB LED legs:** the longest leg is the common one. On most 5 mm RGB LEDs the order is red, common, green,
-blue, but check yours: with the common leg on 3V3, touch each other leg to GND through a resistor and see
-which colour lights.
-
-**RGB LED type:** this wand's LED is *common anode*: the long leg goes to 3.3 V and a colour lights when its
-pin is LOW. If your LED is *common cathode* (the long leg must go to GND instead), wire the long leg to GND
-and set `STATUS_LED_COMMON_ANODE = false` in `firmware/src/main.cpp`. Green and blue
-need about 3 V of the 3.3 V available, hence their smaller resistors; they will still look a little dimmer than red.
+**No light on the wand:** the wand has no LED or other light. The status at the top of the SpellWand UI
+shows what it is doing: ready, casting, or waiting for the Mac. Each gesture's colour, set in the UI, is
+only for the app's own display; the wand never receives it.
 
 ## Power
 
-4× AAA (about 6 V fresh) go straight into the **5V/VIN** pin; the board's 1117 regulator turns that into 3.3 V
-for the ESP32, the IMU and the RGB LED (it needs about 4.3 V or more, which 4 cells keep up until nearly empty).
-Use the holder's switch as the wand's on/off switch. Rechargeable NiMH AAA work too.
+The wand has no battery. It runs from the USB cable that also programs it: the Mac's USB port gives 5 V, and the
+dev board's 1117 regulator turns that into 3.3 V for the ESP32 and the IMU. Plugging the cable in switches the wand
+on.
 
-- **Never connect the batteries to the 3V3 pin**: 6 V there destroys the ESP32.
-- **Check polarity before switching on**: dev boards usually have no reverse-polarity protection.
-- **Switch the batteries off while the USB cable is plugged in** (flashing, serial monitor), so the two
-  supplies can't push into each other or into your computer's USB port.
-- All grounds (batteries, ESP32, IMU, LEDs, button) connect together.
-- If the ESP32 keeps restarting on battery and the serial monitor says *Brownout detector was triggered*,
-  the batteries are too low.
+- Leave the **5V/VIN** pin unconnected, and never put anything but 3.3 V on the 3V3 pin.
+- Use a USB cable that carries data, not a charge-only one: the Mac talks to the board over it while flashing.
+- The cable pulls on the board with every swing. Tie it down to the board near the handle, so a tug doesn't work
+  the USB socket loose and restart the wand.
+- All grounds (ESP32, IMU, button) connect together.
 
 This branch (`BNO085`) is for the BNO080 / BNO085, and the BNO086 should work too, because they share the same
-protocol. Branch `mpu9250` has the MPU-9250 / MPU-6500 version. Branch `main` is older and has neither the RGB LED
-nor the component test tools.
+protocol. Branch `mpu9250` has the MPU-9250 / MPU-6500 version. Branch `main` is older and has no component
+test tools.
 
 **Gyro offset:** the BNO08x removes this itself, so the firmware doesn't. Its datasheet says the correction is
 fastest on a stable surface, so lay the wand on a table for a moment after switching it on.
@@ -69,13 +61,8 @@ fastest on a stable surface, so lay the wand on a table for a moment after switc
 **I²C on the ESP32:** Adafruit lists the BNO085 as not working well over I²C with the ESP32, because of how it
 stretches the clock. The firmware uses INT and RST to reduce the risk, but this hasn't been tried on real hardware
 yet. If readings stop or `IMU reset detected` keeps repeating, set `I2C_FAST_CLOCK_HZ` to `100000` in
-`firmware/src/main.cpp`. SPI is the fallback if that doesn't help; it needs more wires and new pins, because
-the default SPI pins are used by the LED.
-
-`STATUS_LED` colours: dim white `IDLE`, blue `CASTING`, amber `INFLIGHT` (waiting for the Mac), then the
-spell colour for 1 s, three flashes of the `UNKNOWN` colour (red by default), or two magenta flashes if the
-Mac didn't answer within 2 s. Spell colours (including `UNKNOWN`) are set only in the SpellWand UI
-(`config.json`) and sent with each result; the wand itself only knows its state colours.
+`firmware/src/main.cpp`. SPI is the fallback if that doesn't help. It needs more wires, and the ESP32's
+default SPI pins are free for it: SCK GPIO 18, MISO GPIO 19, MOSI GPIO 23, CS GPIO 5.
 
 ## Setup
 
@@ -104,8 +91,8 @@ another app without that declaration, makes Python crash immediately with exit c
 ## Tests (no hardware needed)
 
 ```bash
-cd mac_app && .venv/bin/python -m unittest discover -s tests -v      # Mac app: 156 tests
-cd firmware && ~/.platformio/penv/bin/pio test -e native              # wand logic: 36 tests, run on the Mac
+cd mac_app && .venv/bin/python -m unittest discover -s tests -v      # Mac app: 186 tests
+cd firmware && ~/.platformio/penv/bin/pio test -e native              # wand logic: 35 tests, run on the Mac
 ```
 
 Both suites check the same example bytes from `docs/protocol.md`, so the two sides agree on the format.
@@ -125,15 +112,15 @@ over the same USB cable that flashes it. From `firmware/`:
 Press the **EN** button on the board to restart it and see the boot messages from the start.
 
 1. **Board alone.** Flash and open the serial monitor. Expect `=== SpellWand firmware booted ===`,
-   `BLE advertising as SpellWand` and an IMU error (no IMU yet). The `STATUS_LED` should glow dim white.
+   `BLE advertising as SpellWand` and an IMU error (no IMU yet).
 2. **IMU.** Wire the BNO08x and reboot with the wand lying still. Expect `BNO08x answered at 0x4B` (or `0x4A`),
    `IMU software: part ..., version ...` and `IMU reports: accelerometer on, gyroscope on`. At start-up the
    chip resets twice, so expect two `IMU reset detected` lines (and possibly one `accelerometer FAILED` before
    them) before the readings start; more later mean the link is unreliable (see **I²C on the ESP32** above).
    If `begin()` fails or no readings arrive, check PS0, PS1, INT and RST, and that the IMU's header is
    soldered: pins pushed through without solder give random results.
-3. **Button and LED.** Hold `CAST_BUTTON`: serial shows `CAST_START`, the LED turns blue; release: `CAST_END`,
-   amber, then two magenta flashes after 2 s (nobody answered yet).
+3. **Button.** Hold `CAST_BUTTON`: serial shows `CAST_START (button)` and `State: CASTING`; release:
+   `CAST_END` and `State: INFLIGHT`, then `State: IDLE` after 2 s (nobody answered yet).
 4. **Bluetooth.** `cd mac_app && .venv/bin/python ble_manager.py --listen`, then cast: you should see
    `CastStart`, about 100 `MotionSample`s per second and `CastEnd`.
 5. **Training.** `.venv/bin/python app.py`, press **Connect wand**, and record 5 or more examples of each
@@ -195,8 +182,8 @@ that is allowed to use Bluetooth (see above):
 ```
 
 Stand as far from the Mac as you expect to use the wand, about 3 m. Make 20 casts: hold the button past
-3 s (the wand stops itself at 3 s) and wait for the two magenta flashes before the next cast. They are
-normal here, because the listener doesn't answer. Press Ctrl+C, then:
+3 s (the wand stops itself at 3 s) and wait 2 s before the next cast: the listener doesn't answer, so the
+wand waits that long for a `GESTURE_RESULT` before it returns to `IDLE` and can cast again. Press Ctrl+C, then:
 
 ```bash
 .venv/bin/python component_tests.py link link_test.log
@@ -219,25 +206,26 @@ dropped samples. Delete the file to start a new test.
 
 `response_ms` is only the Mac's share: from `CAST_END` arriving to `GESTURE_RESULT` sent. For the full time,
 keep the serial monitor open: it prints lines like `GESTURE_RESULT: CIRCLE, 85 ms after CAST_END`. Add 30 ms
-of button debounce to get button release to LED result. The log can't know which gesture you meant to
-cast, so cast in blocks of one gesture and add an `actual` column in a spreadsheet to work out accuracy.
+of button debounce to get the time from releasing the button to the result reaching the wand. The log can't
+know which gesture you meant to cast, so cast in blocks of one gesture and add an `actual` column in a
+spreadsheet to work out accuracy.
 
 ### Extra test tools
 
 `tools/hardware_tests/` has small helpers for finding faults and for guided tests. Run these from the top of the
-repo. The first two replace the wand firmware, so flash it back afterwards with `pio run -d firmware -t upload`.
+repo. `pin_check` replaces the wand firmware, so flash the firmware back afterwards with
+`pio run -d firmware -t upload`.
 
 | Tool | Use it to |
 |---|---|
-| `pin_check` | Find wiring faults: turns on all the LED pins and prints the raw button state |
-| `led_check` | Check the LED: shows each colour for 3 s and prints which colour it should be |
+| `pin_check` | Find button wiring faults: prints the raw `CAST_BUTTON` state |
 | `button_test.py` | Run the 20-press button test, one prompt at a time |
 | `guided_turns.py` | Run the turn test with prompts telling you when to turn (needs the `imu_log` build) |
 | `imu_reset_test.py` | Check that the readings come back after the IMU resets: it resets the IMU and counts the readings (needs the `imu_log` build; nothing to touch) |
 | `link_drive.py` | Run the Bluetooth test with no button: the Mac starts 20 recordings of 5 s each |
 | `capture.py` | Save what the board prints to a file; add `--restart` to include the boot messages |
 
-Flash and watch `pin_check` or `led_check` like this:
+Flash and watch `pin_check` like this:
 
 ```bash
 ~/.platformio/penv/bin/pio run -d tools/hardware_tests/pin_check -t upload
@@ -273,12 +261,12 @@ PNG** to update its picture. Wires and arrows stay attached when you move things
 
 | Step | Status |
 |---|---|
-| PlatformIO project, IMU reading, `CAST_BUTTON`, states, `STATUS_LED`, `BLE_LINK`, `GESTURE_RESULT` colours | Written and compiles; logic tested on the Mac (`pio test -e native`); **needs hardware test** |
+| PlatformIO project, IMU reading, `CAST_BUTTON`, states, `BLE_LINK`, `GESTURE_RESULT` | Written and compiles; logic tested on the Mac (`pio test -e native`); **needs hardware test** |
 | `BLE Manager` | Scanning tested on this Mac; connecting tested against the simulated wand only; **needs hardware test** |
 | `Sample Recorder`, `Gesture Classifier`, `Action Dispatcher`, `config.json` | Tested (simulated data) |
 | Flask `SpellWand UI` | Tested through its API and by hand in a browser with the simulated wand |
 | End-to-end | Tested with the simulated wand; **real end-to-end needs hardware** |
 | Rejection threshold | Default 1.0 works on simulated data; **tune with real recordings** |
 | BNO08x driver | Runs on the real BNO08x with the pinned SparkFun library 1.0.6: 100 readings per second. After an IMU reset the readings come back in about 0.3 s (`imu_reset_test.py`, 5 of 5 runs); **what makes the IMU reset during use is not yet known** |
-| `tools/hardware_tests/` | Button, turn and capture scripts tested on a fake board; `pin_check` and `led_check` compile; `link_drive.py` has run on the real ESP32, but not in this tidied form |
+| `tools/hardware_tests/` | Button, turn and capture scripts tested on a fake board; `pin_check` compiles; `link_drive.py` has run on the real ESP32, but not in this tidied form |
 | Component test tools (`imu_log` build, `component_tests.py`, `cast_log.csv`) | Reports tested on generated logs; serial logging tried with a fake board; **needs hardware test** |

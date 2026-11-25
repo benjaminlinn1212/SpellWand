@@ -5,6 +5,7 @@ Run from mac_app/:
 """
 
 import threading
+import time
 import unittest
 
 from protocol import (
@@ -49,19 +50,46 @@ class SimulatedWandTest(unittest.TestCase):
         self.assertGreater(len(middle), 50)
         self.assertEqual(self.wand.state, "INFLIGHT")
 
-    def test_gesture_result_shows_its_colour_then_returns_to_idle(self):
+    def test_gesture_result_returns_the_wand_to_idle_at_once(self):
         self.wand.cast("ZIGZAG")
-        self.wand.send(encode_gesture_result("ZIGZAG", (10, 20, 30)))
-        self.assertEqual(self.wand.feedback_log, [("ZIGZAG", (10, 20, 30))])
+        self.wand.send(encode_gesture_result("ZIGZAG"))
+        self.assertEqual(self.wand.results, ["ZIGZAG"])
+        self.assertEqual(self.wand.state, "IDLE")
+        self.assertTrue(self.wand.cast("CIRCLE"))  # ready for the next cast straight away
+
+    def test_unknown_is_an_answer_like_any_other(self):
+        self.wand.cast("CIRCLE")
+        self.wand.send(encode_gesture_result("CIRCLE"))
+        self.wand.cast("ZIGZAG")
+        self.wand.send(encode_gesture_result("UNKNOWN"))
+        self.assertEqual(self.wand.results, ["CIRCLE", "UNKNOWN"])
         self.assertEqual(self.wand.state, "IDLE")
 
-    def test_wand_shows_exactly_the_colour_the_mac_sends(self):
-        # Spell colours live only in the Mac's config.json; the wand has none of its own.
+    def test_with_no_answer_the_wand_returns_to_idle_after_2_s(self):
         self.wand.cast("CIRCLE")
-        self.wand.send(encode_gesture_result("CIRCLE", (0, 0, 0)))
-        self.wand.cast("ZIGZAG")
-        self.wand.send(encode_gesture_result("UNKNOWN", (0, 255, 255)))
-        self.assertEqual(self.wand.feedback_log, [("CIRCLE", (0, 0, 0)), ("UNKNOWN", (0, 255, 255))])
+        self.wand.pass_time(1999)
+        self.assertEqual(self.wand.state, "INFLIGHT")
+        self.wand.pass_time(1)
+        self.assertEqual(self.wand.state, "IDLE")
+        self.assertTrue(self.wand.cast("CIRCLE"))
+
+    def test_a_late_answer_is_ignored(self):
+        self.wand.cast("CIRCLE")
+        self.wand.pass_time(2000)
+        self.wand.send(encode_gesture_result("CIRCLE"))
+        self.assertEqual(self.wand.results, [])
+        self.assertEqual(self.wand.state, "IDLE")
+
+    def test_an_answer_with_no_cast_waiting_is_ignored(self):
+        self.wand.send(encode_gesture_result("CIRCLE"))  # nothing was cast
+        self.wand.perform("CIRCLE")
+        self.wand.send(encode_start_recording())
+        self.wand.send(encode_gesture_result("CIRCLE"))  # during a recording
+        self.assertEqual(self.wand.state, "CASTING")
+        self.wand.send(encode_stop_recording())
+        self.wand.send(encode_gesture_result("CIRCLE"))  # after a recording, which is never classified
+        self.assertEqual(self.wand.results, [])
+        self.assertEqual(self.wand.state, "IDLE")
 
     def test_cast_is_refused_while_waiting_for_a_result(self):
         self.wand.cast("CIRCLE")
@@ -102,6 +130,17 @@ class RealtimeSimulatedWandTest(unittest.TestCase):
         samples = log.of_type(MotionSample)
         duration_ms = samples[-1].t_ms - samples[0].t_ms
         self.assertAlmostEqual(len(samples) / (duration_ms / 1000), 100, delta=15)
+
+    def test_realtime_wand_stops_waiting_for_an_answer_on_the_real_clock(self):
+        wand = SimulatedWand(realtime=True, seed=3)
+        wand.RESULT_TIMEOUT_MS = 500  # shorter than the real 2 s, to keep the test quick
+        log = EventLog(wand)
+        wand.connect()
+        wand.cast("HORIZONTAL_LINE")
+        self.assertTrue(log.cast_ended.wait(timeout=5))
+        self.assertEqual(wand.state, "INFLIGHT")
+        time.sleep(0.6)
+        self.assertEqual(wand.state, "IDLE")
 
 
 if __name__ == "__main__":

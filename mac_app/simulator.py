@@ -178,21 +178,23 @@ class SimulatedWand:
 
     It offers the same methods as ble_manager.BleWandLink (connect, disconnect, send,
     and the on_event / on_disconnect callbacks), plus cast() and perform() to play the
-    user's part. With realtime=False everything happens instantly, which suits tests;
-    with realtime=True samples arrive at 100 Hz from a background thread, like the
-    real wand.
+    user's part. With realtime=False everything happens instantly on a fake clock, which
+    suits tests (pass_time() moves it on); with realtime=True samples arrive at 100 Hz
+    from a background thread, like the real wand.
     """
 
     name = "Simulated wand"
     MAX_RECORDING_S = 5.0
+    RESULT_TIMEOUT_MS = 2000       # as in the firmware: how long INFLIGHT waits for GESTURE_RESULT
 
     def __init__(self, realtime=False, seed=None):
         self.realtime = realtime
         self.on_event = None       # called with the bytes of each event
         self.on_disconnect = None
         self.connected = False
-        self.state = "IDLE"
-        self.feedback_log = []     # (label, rgb) shown for each GESTURE_RESULT
+        self.results = []          # the label of each GESTURE_RESULT that ended a cast
+        self._state = "IDLE"
+        self._inflight_since_ms = 0
         self._rng = np.random.default_rng(seed)
         self._lock = threading.RLock()
         self._source = SOURCE_CAST_BUTTON
@@ -200,6 +202,15 @@ class SimulatedWand:
         self._clock_ms = 10_000    # fake millis() when not realtime
         self._recording_motion = "STILL"
         self._stop_recording = threading.Event()
+
+    @property
+    def state(self):
+        """IDLE, CASTING or INFLIGHT. Like the firmware, the wand stops waiting and returns
+        to IDLE when no GESTURE_RESULT arrives within RESULT_TIMEOUT_MS."""
+        with self._lock:
+            if self._state == "INFLIGHT" and self._now_ms() - self._inflight_since_ms >= self.RESULT_TIMEOUT_MS:
+                self._state = "IDLE"
+            return self._state
 
     # ---- link interface (same as BleWandLink) ----
 
@@ -210,7 +221,7 @@ class SimulatedWand:
         with self._lock:
             self.connected = False
             self._stop_recording.set()
-            self.state = "IDLE"
+            self._state = "IDLE"
 
     def send(self, data):
         """Handle a command from the Mac, exactly as the firmware would."""
@@ -225,9 +236,9 @@ class SimulatedWand:
                 if not self.realtime:
                     self._end(END_NORMAL)
             elif isinstance(command, GestureResult) and self.state == "INFLIGHT":
-                # Like the firmware: show the Mac's colour as sent (spell colours live only in config.json).
-                self.feedback_log.append((command.label, command.rgb))
-                self.state = "IDLE"
+                # The Mac's answer ends the cast. A late or unexpected one is ignored.
+                self.results.append(command.label)
+                self._state = "IDLE"
             elif isinstance(command, ExecuteAction):
                 # Like the firmware: this wand has no action outputs, so it answers "not done".
                 self._emit(encode_action_complete(command.action, False))
@@ -253,17 +264,26 @@ class SimulatedWand:
         simulated_motion(motion, self._rng)  # fail early for an unknown motion
         self._recording_motion = motion
 
+    def pass_time(self, ms):
+        """Move the fake clock on by `ms` milliseconds. A realtime wand follows the real clock."""
+        if self.realtime:
+            raise RuntimeError("a realtime simulated wand follows the real clock")
+        with self._lock:
+            self._clock_ms += ms
+
     # ---- internals ----
 
     def _begin(self, source):
-        self.state = "CASTING"
+        self._state = "CASTING"
         self._source = source
         self._sample_count = 0
         self._emit(encode_cast_start(source))
 
     def _end(self, reason):
         # Change state before sending CAST_END: the Mac may answer immediately.
-        self.state = "INFLIGHT" if self._source == SOURCE_CAST_BUTTON else "IDLE"
+        # A training recording has nothing to classify, so it goes straight back to IDLE.
+        self._state = "INFLIGHT" if self._source == SOURCE_CAST_BUTTON else "IDLE"
+        self._inflight_since_ms = self._now_ms()
         self._emit(encode_cast_end(self._sample_count, reason))
 
     def _stream_cast(self, sequence):

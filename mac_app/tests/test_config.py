@@ -100,7 +100,7 @@ class ValidationTest(unittest.TestCase):
                 self.assertEqual(validate_config(config)["gestures"]["CIRCLE"]["action"], action)
 
     def test_old_wand_led_settings_become_a_notification(self):
-        # The wand no longer has an action LED; older config files must still load.
+        # Older config files could switch an LED on the wand, which has no outputs. They must still load.
         config = copy.deepcopy(DEFAULT_CONFIG)
         config["gestures"]["CIRCLE"]["action"] = {"type": "wand_led", "mode": "toggle"}
         self.assertEqual(validate_config(config)["gestures"]["CIRCLE"]["action"],

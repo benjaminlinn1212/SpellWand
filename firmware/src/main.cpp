@@ -3,7 +3,6 @@
 // Hardware glue around the tested logic in lib/wand_core:
 //   IMU (BNO080 / BNO085 / BNO086, I2C) -> MOTION_SAMPLE events while CASTING
 //   CAST_BUTTON        -> debounced, drives IDLE / CASTING / INFLIGHT
-//   STATUS_LED         -> colour from the state machine (4-leg RGB LED, PWM on three pins)
 //   BLE_LINK           -> events notified to the Mac, commands written by the Mac
 // Message format: docs/protocol.md
 
@@ -17,7 +16,6 @@
 #include "debouncer.h"
 #include "imu_pairing.h"
 #include "protocol.h"
-#include "rgb_led.h"
 #include "send_queue.h"
 #include "wand_axes.h"
 #include "wand_state.h"
@@ -31,9 +29,6 @@ static const int IMU_SCL_PIN = 22;
 static const int IMU_INT_PIN = 4;
 static const int IMU_RST_PIN = 26;
 static const int CAST_BUTTON_PIN = 27;  // to GND, internal pull-up: LOW = pressed
-static const int STATUS_LED_RED_PIN = 18;    // each through its resistor to the RGB LED's legs
-static const int STATUS_LED_GREEN_PIN = 19;
-static const int STATUS_LED_BLUE_PIN = 23;
 
 // ---- Settings ----
 static const uint32_t SERIAL_BAUD = 115200;
@@ -41,11 +36,6 @@ static const uint16_t IMU_REPORT_INTERVAL_MS = 10;  // 100 Hz accelerometer + gy
 static const uint32_t I2C_FAST_CLOCK_HZ = 400000;   // drop to 100000 if readings are flaky
 static const uint32_t IMU_RETRY_MS = 2000;
 static const uint32_t IMU_STALLED_MS = 450;         // the library gives up on a silent IMU after 500 ms
-static const uint8_t LED_BRIGHTNESS = 255;          // 0-255; the resistors already limit the current
-// This wand's LED is common anode: its long leg goes to 3.3 V and a colour lights when its pin is
-// LOW. For a common cathode LED (long leg to GND) set this to false.
-static const bool STATUS_LED_COMMON_ANODE = true;
-static const uint32_t LED_PWM_HZ = 5000;            // fast enough that the eye sees no flicker
 
 // BLE_LINK identifiers: must match mac_app/protocol.py
 static const char* DEVICE_NAME = "SpellWand";
@@ -321,7 +311,7 @@ static void handleCommand(const protocol::Command& command, uint32_t now) {
     case protocol::GESTURE_RESULT:
       Serial.printf("GESTURE_RESULT: %s, %lu ms after CAST_END\n", command.label,
                     (unsigned long)(millis() - lastCastEndMs));
-      wand.gestureResult(command.label, command.color, now);
+      wand.gestureResult();
       break;
     case protocol::EXECUTE_ACTION: {
       // Reserved in the protocol, but this wand has no action outputs: answer "not done".
@@ -334,27 +324,7 @@ static void handleCommand(const protocol::Command& command, uint32_t now) {
 }
 
 // ---------------------------------------------------------------------------
-// STATUS_LED (RGB LED on three PWM channels)
-
-static const int LED_PINS[3] = {STATUS_LED_RED_PIN, STATUS_LED_GREEN_PIN, STATUS_LED_BLUE_PIN};
-
-static void startStatusLed() {
-  for (int channel = 0; channel < 3; channel++) {
-    ledcSetup(channel, LED_PWM_HZ, 8);  // 8-bit duty: 0-255, like the colour values
-    ledcAttachPin(LED_PINS[channel], channel);
-  }
-}
-
-static void updateStatusLed(uint32_t now) {
-  static Rgb shown = {1, 2, 3};  // impossible start value forces the first write
-  Rgb c = wand.ledColor(now);
-  if (c.r != shown.r || c.g != shown.g || c.b != shown.b) {
-    shown = c;
-    ledcWrite(0, rgb_led::duty(c.r, LED_BRIGHTNESS, STATUS_LED_COMMON_ANODE));
-    ledcWrite(1, rgb_led::duty(c.g, LED_BRIGHTNESS, STATUS_LED_COMMON_ANODE));
-    ledcWrite(2, rgb_led::duty(c.b, LED_BRIGHTNESS, STATUS_LED_COMMON_ANODE));
-  }
-}
+// Start-up and main loop
 
 void setup() {
   Serial.begin(SERIAL_BAUD);
@@ -363,8 +333,6 @@ void setup() {
   Serial.println("=== SpellWand firmware booted ===");
 
   pinMode(CAST_BUTTON_PIN, INPUT_PULLUP);
-  startStatusLed();
-  updateStatusLed(millis());
 
   // Start at the default 100 kHz: the BNO08x start-up handshake is most reliable there.
   Wire.begin(IMU_SDA_PIN, IMU_SCL_PIN);
@@ -416,12 +384,17 @@ void loop() {
   }
 
   static WandState lastState = WandState::IDLE;
+  bool wasInflight = wand.state() == WandState::INFLIGHT;
   wand.tick(now);
+  // tick() only leaves INFLIGHT when no GESTURE_RESULT arrived in time.
+  if (wasInflight && wand.state() != WandState::INFLIGHT) {
+    Serial.printf("No GESTURE_RESULT within %lu ms, so the wand stopped waiting\n",
+                  (unsigned long)WandStateMachine::RESULT_TIMEOUT_MS);
+  }
   if (wand.state() != lastState) {
     lastState = wand.state();
     Serial.printf("State: %s\n", stateName(lastState));
   }
 
   sendWaitingMessages();
-  updateStatusLed(now);
 }

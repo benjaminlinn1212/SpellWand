@@ -1,7 +1,9 @@
 """Settings kept in config.json and edited from the SpellWand UI.
 
-These stay on the Mac. The wand only ever receives a GestureLabel and its colour
-(in GESTURE_RESULT); the DTW threshold and the dataset are never sent to it.
+These stay on the Mac. The wand only ever receives a GestureLabel (in GESTURE_RESULT).
+The colours, the actions, the DTW threshold and the dataset are never sent to it: each
+gesture's colour is how the app shows that gesture (the 3D trail, the last cast, the
+Living room).
 """
 
 import copy
@@ -98,7 +100,8 @@ def _colour(value, name):
 
 def _action(action, label):
     if isinstance(action, dict) and action.get("type") == "wand_led":
-        # Older config files used the wand's action LED, which no longer exists.
+        # Older config files could switch an LED on the wand. The wand has no outputs, so such a
+        # gesture shows a notification instead.
         return {"type": "notify", "message": f"{label} cast!"}
     if not isinstance(action, dict) or action.get("type") not in ACTION_TYPES:
         raise ConfigError(f"{label}: action type must be one of {', '.join(ACTION_TYPES)}")

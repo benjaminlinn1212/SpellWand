@@ -31,11 +31,7 @@ POWER = "#f2917a"
 
 ELECTRICAL = "pointerEvents=1;shadow=0;dashed=0;html=1;"
 # Connection points of draw.io's electrical symbols, read from draw.io itself.
-RESISTOR = ("shape=mxgraph.electrical.resistors.resistor_2;", 0.5)
-LED = ("shape=mxgraph.electrical.opto_electronics.led_1;", 0.5385)
-SWITCH = ("shape=mxgraph.electrical.electro-mechanical.singleSwitch;aspect=fixed;elSwitchState=off;", 0.8)
 BUTTON = ("shape=mxgraph.electrical.electro-mechanical.pushbutton;aspect=fixed;elSwitchState=off;", 0.8)
-BATTERY = ("shape=mxgraph.electrical.miscellaneous.batteryStack;", 0.5)
 GROUND = "shape=mxgraph.electrical.signal_sources.signal_ground;"
 
 
@@ -145,16 +141,16 @@ def code_flowchart():
     header(830, "Mac app (Python)", "mac_app/: app.py, controller.py, classifier.py, ...", MAC)
 
     container = "rounded=1;arcSize=2;dashed=1;fillColor=none;whiteSpace=wrap;html=1;verticalAlign=top;align=left;spacingLeft=14;spacingTop=4;fontStyle=1;fontSize=13.5;"
-    d.vertex("loop(): runs continuously", 30, 362, 380, 600, container + f"strokeColor={WAND[1]};fontColor={WAND[1]};")
+    d.vertex("loop(): runs continuously", 30, 362, 380, 530, container + f"strokeColor={WAND[1]};fontColor={WAND[1]};")
     controller = d.vertex("controller.py: for each message from the wand", 830, 362, 380, 712,
              container + f"strokeColor={MAC[1]};fontColor={MAC[1]};")
 
     pill = "rounded=1;arcSize=50;whiteSpace=wrap;html=1;fontStyle=1;fontSize=13;"
     # --- wand column ---
     wx, ww = 50, 340
-    power = d.vertex("Power on (slide switch)", 105, 156, 230, 36, pill + f"fillColor={WAND[0]};strokeColor={WAND[1]};")
+    power = d.vertex("Power on (USB plugged in)", 105, 156, 230, 36, pill + f"fillColor={WAND[0]};strokeColor={WAND[1]};")
     setup, _ = step(d, wx, 212, ww, "setup()", [
-        "Serial, CAST_BUTTON pull-up, RGB LED PWM",
+        "Serial, CAST_BUTTON pull-up",
         "Find the IMU at 0x4B / 0x4A, reset it (RST)",
         "Take every report with our own handler",
         "Turn on 100 Hz accelerometer + gyro reports",
@@ -167,20 +163,19 @@ def code_flowchart():
     send, send_h = step(d, wx, 488, ww, "If CASTING: send MOTION_SAMPLE", ["index, time, accel, gyro (19 bytes)"], WAND)
     flow_arrow(d, read, send)
     commands, commands_h = step(d, wx, 560, ww, "Handle commands from the Mac", [
-        "START / STOP_RECORDING, GESTURE_RESULT"], WAND)
+        "START / STOP_RECORDING (training)",
+        "GESTURE_RESULT while INFLIGHT: now IDLE"], WAND)
     flow_arrow(d, send, commands)
     button, button_h = step(d, wx, 648, ww, "Read CAST_BUTTON (debounced 30 ms)", [
         "pressed in IDLE: CAST_START, now CASTING",
-        "released: CAST_END, now INFLIGHT (amber)"], WAND)
+        "released: CAST_END, now INFLIGHT"], WAND)
     flow_arrow(d, commands, button)
     tick, tick_h = step(d, wx, 736, ww, "tick(): time limits", [
         "cast 3 s / recording 5 s: CAST_END",
-        "no GESTURE_RESULT within 2 s: magenta flashes"], WAND)
+        "no GESTURE_RESULT within 2 s: now IDLE"], WAND)
     flow_arrow(d, button, tick)
-    leds, leds_h = step(d, wx, 824, ww, "Update STATUS_LED", ["state colour, spell colour, or flashes"], WAND)
-    flow_arrow(d, tick, leds)
-    loop_y = 824 + leds_h + 22
-    d.edge(leds, read, f"edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor={INK};"
+    loop_y = 736 + tick_h + 22
+    d.edge(tick, read, f"edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor={INK};"
                        f"strokeWidth=1.5;" + anchor("exit", 0.5, 1) + anchor("entry", 0, 0.5),
            points=[(220, loop_y), (40, loop_y), (40, 402 + read_h / 2)])
     d.text("back to the top", 56, loop_y + 8, 160, 20, size=11.5, colour=MUTED, italic=True)
@@ -214,7 +209,7 @@ def code_flowchart():
         "nearest gesture"], MAC)
     flow_arrow(d, training, classify, style_extra=anchor("exit", 0.5, 1) + anchor("entry", 0.2647, 0))
     d.text("no", 948, 654, 30, 18, size=11.5, colour=MUTED)
-    result, result_h = step(d, mx, 764, mw, "Send GESTURE_RESULT", ["label + colour from config.json"], MAC)
+    result, result_h = step(d, mx, 764, mw, "Send GESTURE_RESULT", ["just the label; colours stay on the Mac"], MAC)
     flow_arrow(d, classify, result)
     show, _ = step(d, mx, 834, mw, "Show the result in the UI", ["label, distance, 3D trail, live charts"], MAC)
     flow_arrow(d, result, show)
@@ -222,8 +217,8 @@ def code_flowchart():
     flow_arrow(d, show, has_action)
     d.text("no: done", 1146, 942, 70, 20, size=11.5, colour=MUTED)
     action, _ = step(d, mx, 1002, mw, "Action Dispatcher", [
-        "Mac notification, or web request",
-        "(e.g. a Home Assistant webhook)"], MAC)
+        "Mac notification, web request,",
+        "or switch a Living room device"], MAC)
     flow_arrow(d, has_action, action)
     d.text("yes", 1028, 984, 34, 18, size=11.5, colour=MUTED)
     training_ui, training_ui_h = step(d, mx, 1094, mw, "Training buttons in the SpellWand UI",
@@ -302,32 +297,25 @@ def circuit():
              f"fillColor={PANEL};strokeColor={BORDER};strokeWidth=2.5;fontColor={LABEL};fontSize=25;fontStyle=1;")
 
     # ESP32 board; wires attach at the pin heights
-    ex, ey, ew, eh = 300, 30, 330, 660
+    ex, ey, ew, eh = 300, 30, 330, 575
     esp = d.vertex("ESP32-WROOM-32", ex, ey, ew, eh, board)
 
     def pin(y, side):
         return (0 if side == "left" else 1, round((y - ey) / eh, 4))
 
-    for name, y in {"5V / VIN": 250, "GND": 560}.items():
+    for name, y in {"USB": 250, "GND": 560}.items():
         label(name, ex + 16, y)
     for name, y in {"GPIO21 (SDA)": 115, "GPIO22 (SCL)": 160, "GPIO4 (INT)": 205, "GPIO26 (RST)": 250, "3V3": 295,
-                    "GPIO18": 470, "GPIO19": 525, "GPIO23": 580, "GPIO27": 645}.items():
+                    "GPIO27": 560}.items():
         label(name, ex + ew - 236, y, align="right")
 
-    # Batteries and on/off switch
-    battery = symbol(BATTERY, 50, 400, 100, 60, f"strokeColor={LABEL};")
-    switch = symbol(SWITCH, 195, 250 - 0.8 * 20, 75, 20)
-    wire(d, battery, switch, POWER, exit_at=(1, 0.5), entry_at=(0, 0.8), points=[(175, 430), (175, 250)])
-    wire(d, switch, esp, POWER, exit_at=(1, 0.8), entry_at=pin(250, "left"))
-    battery_ground = ground(170, 590)
-    wire(d, battery, battery_ground, WIRE, exit_at=(0, 0.5), entry_at=(0.5, 0),
-         points=[(30, 430), (30, 560), (170, 560)])
-    wire(d, esp, battery_ground, WIRE, exit_at=pin(560, "left"), entry_at=(0.5, 0), points=[(170, 560)])
-    label("On/off switch", 130, 205, w=170, colour=WIRE, align="center")
-    label("4 × AAA", 50, 482, w=130, size=22, bold=True)
-    label("≈ 6 V", 50, 512, w=130, colour=WIRE)
-    label("+", 150, 400, w=24, size=24, colour=POWER, bold=True)
-    label("−", 30, 400, w=24, size=24, colour=WIRE, bold=True)
+    # Power and data: the USB cable from the Mac (no battery)
+    mac = d.vertex("Mac", 40, 205, 130, 90, board.replace("verticalAlign=top;spacingTop=14;", "verticalAlign=middle;"))
+    wire(d, mac, esp, POWER, exit_at=(1, 0.5), entry_at=pin(250, "left"))
+    label("USB cable", 170, 222, w=130, colour=LABEL, align="center")
+    label("5 V + data", 170, 278, w=130, colour=POWER, align="center")
+    esp_ground = ground(170, 590)
+    wire(d, esp, esp_ground, WIRE, exit_at=pin(560, "left"), entry_at=(0.5, 0), points=[(170, 560)])
 
     # IMU
     ix, iy, iw, ih = 880, 30, 250, 385
@@ -348,24 +336,12 @@ def circuit():
     for name in ("GND", "PS0", "PS1"):
         wire(d, imu, imu_ground, WIRE, exit_at=imu_pin(name), entry_at=(0.5, 0), points=[(850, imu_pins[name])])
 
-    # RGB LED (common cathode)
-    led_ground = ground(960, 615)
-    for y, value, colour in [(470, "220 Ω", "#ee5a52"), (525, "100 Ω", "#5cc26f"), (580, "100 Ω", "#4f74f7")]:
-        resistor = symbol(RESISTOR, 690, y - 8, 80, 16)
-        led = symbol(LED, 830, y - 0.5385 * 32, 50, 32, f"fillColor={colour};")
-        wire(d, esp, resistor, WIRE, exit_at=pin(y, "right"), entry_at=(0, 0.5))
-        wire(d, resistor, led, WIRE, exit_at=(1, 0.5), entry_at=(0, LED[1]))
-        wire(d, led, led_ground, WIRE, exit_at=(1, LED[1]), entry_at=(0.5, 0), points=[(960, y)])
-        label(value, 680, y - 22, w=100, size=17, colour=WIRE, align="center")
-    label("RGB LED", 985, 500, w=180, size=22, bold=True)
-    label("common cathode", 985, 532, w=180, size=17, colour=WIRE)
-
-    # Cast button
-    button = symbol(BUTTON, 760, 645 - 0.8 * 16, 70, 16)
-    wire(d, esp, button, WIRE, exit_at=pin(645, "right"), entry_at=(0, 0.8))
-    button_ground = ground(880, 660)
-    wire(d, button, button_ground, WIRE, exit_at=(1, 0.8), entry_at=(0.5, 0), points=[(880, 645)])
-    label("Cast button", 985, 650, w=180, size=22, bold=True)
+    # Cast button, level with GND on the other side of the board
+    button = symbol(BUTTON, 760, 560 - 0.8 * 16, 70, 16)
+    wire(d, esp, button, WIRE, exit_at=pin(560, "right"), entry_at=(0, 0.8))
+    button_ground = ground(880, 575)
+    wire(d, button, button_ground, WIRE, exit_at=(1, 0.8), entry_at=(0.5, 0), points=[(880, 560)])
+    label("Cast button", 985, 565, w=180, size=22, bold=True)
 
     d.text("All ground symbols connect to the ESP32's GND.", 30, 640, 250, 44, size=14, colour=WIRE)
     return d.save("circuit")

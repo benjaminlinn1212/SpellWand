@@ -30,8 +30,8 @@ const Shared = (() => {
 
   // ---------- the connection ----------
 
-  // The wand in one phrase, with a dot: hollow with no wand, green when ready, and while busy the
-  // colour the wand's own light shows (blue casting, amber waiting). _header.html says the same.
+  // The wand in one phrase, with a dot: hollow with no wand, green when ready, blue casting, amber
+  // waiting for the Mac (style.css). _header.html says the same.
   function describeWand(status) {
     if (!status.connected) return ["", "No wand connected"];
     const who = status.mode === "simulated" ? "Simulated wand" : "Wand";

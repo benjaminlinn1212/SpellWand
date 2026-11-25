@@ -5,7 +5,7 @@
    piece of rule under the current page and under each heading, the chosen option, and whatever the
    pointer is on: a control answers the pointer by lighting up. The motion view is a room of
    graph paper, light or dark with the page, and the trail is drawn in the spell's colour. The
-   last cast's name sits on a block of that colour, the colour the wand's LED flashes.
+   last cast's name sits on a block of that colour.
    Corners grow with the size of the thing (--r-mark to --r-panel). Every area keeps its size:
    lists scroll inside their panel instead of growing. app.js reads the chart colours from the
    variables here. */
@@ -49,10 +49,9 @@
   --stage-text: #5f5b7c;
   --stage-light: #c48600;   /* a trail whose spell is not known yet: the theme colour, deep enough to show */
 
-  /* the wand's STATUS_LED colours (firmware/lib/wand_core/wand_state.h) */
-  --led-idle: #ffffff;
-  --led-casting: #3d6bff;
-  --led-inflight: #ff9600;
+  /* the status dot while the wand is busy (it is green when the wand is ready) */
+  --state-casting: #3d6bff;
+  --state-waiting: #ff9600; /* waiting for the Mac's answer */
   --recording: #2f5bea;     /* the casting blue, deep enough for white text */
 
   /* the arrow of a drop-down list */
@@ -385,21 +384,21 @@ select {
 .masthead-actions > button { min-height: 32px; }   /* as tall as the theme switch beside them */
 
 /* The wand's status: a dot and a phrase (shared.js). Hollow with no wand; green when ready; while
-   busy, the colour the wand's own light shows, with a ring spreading from it. */
+   busy, blue casting or amber waiting for the Mac, with a ring spreading from it. */
 .dot {
-  --led: var(--good);
+  --dot: var(--good);
   flex: none;
   width: 8px;
   height: 8px;
   border: 1.5px solid var(--line-strong);
   border-radius: 50%;
 }
-.dot.ready, .dot.casting, .dot.waiting, .dot.searching { border: 0; background: var(--led); }
-.dot.casting { --led: var(--led-casting); animation: lamp 0.9s ease-out infinite; }
-.dot.waiting { --led: var(--led-inflight); animation: lamp 0.9s ease-out infinite; }
-.dot.searching { --led: var(--warn); animation: blink 0.7s ease-in-out infinite alternate; }
-@keyframes lamp {   /* a ring spreads from the lamp while the wand is busy */
-  from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--led) 60%, transparent); }
+.dot.ready, .dot.casting, .dot.waiting, .dot.searching { border: 0; background: var(--dot); }
+.dot.casting { --dot: var(--state-casting); animation: busy 0.9s ease-out infinite; }
+.dot.waiting { --dot: var(--state-waiting); animation: busy 0.9s ease-out infinite; }
+.dot.searching { --dot: var(--warn); animation: blink 0.7s ease-in-out infinite alternate; }
+@keyframes busy {   /* a ring spreads from the dot while the wand is busy */
+  from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--dot) 60%, transparent); }
   to { box-shadow: 0 0 0 7px transparent; }
 }
 
@@ -493,7 +492,7 @@ button.ghost {
 button.ghost[aria-expanded="true"] { --base: var(--line); --text: var(--ink); }
 button.ghost.icon-only { width: 32px; padding: 0; }
 
-/* Help: short sections of plain text, and the wand's lights in their colours. */
+/* Help: short sections of plain text. */
 .help { display: grid; gap: 24px; align-content: start; }
 .help p { margin: 0 0 8px; font-size: 0.9375rem; line-height: 1.55; }
 .help p:last-child { margin-bottom: 0; }
@@ -506,15 +505,6 @@ button.ghost.icon-only { width: 32px; padding: 0; }
   font-size: 0.8125rem;
   font-weight: 600;
 }
-.lights { display: grid; gap: 6px; font-size: 0.9375rem; }
-.lights li { display: flex; align-items: center; gap: 10px; }
-.light { flex: none; width: 12px; height: 12px; border-radius: 50%; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 25%, transparent); }
-.light.idle { background: var(--led-idle); }
-.light.casting { background: var(--led-casting); }
-.light.inflight { background: var(--led-inflight); }
-.light.recognised { background: conic-gradient(#0050ff 0 33%, #00c828 0 66%, #ff4000 0); }
-.light.unknown { background: #ff0000; }
-.light.no-answer { background: #ff00ff; }
 
 /* ---------- the simulated wand's toolbar: floating at the bottom of every page ----------
    A floating part, so it has the panels' 12px corners, a shadow, and 6px of padding that sets
@@ -834,7 +824,7 @@ th:last-child, td:last-child { padding-right: 0; }
 
 .settings h3 { margin: 28px 0 8px; }
 
-/* One gesture per line: its LED colour, its name, what it does (one menu), and a button to
+/* One gesture per line: its colour, its name, what it does (one menu), and a button to
    remove it. A second line, under the name, only when the action needs words. Unknown sits in
    the same columns. */
 .gestures { border-top: 1px solid var(--line); }

@@ -57,13 +57,22 @@ class ControllerTest(unittest.TestCase):
             if event["type"] == kind:
                 found.append(event["data"])
 
-    def test_cast_is_recognized_and_the_wand_shows_the_configured_colour(self):
+    def test_cast_is_recognized_and_the_wand_gets_the_label(self):
         self.wand.cast("CIRCLE")
         [result] = self.published("result")
         self.assertEqual(result["label"], "CIRCLE")
-        self.assertEqual(self.wand.feedback_log, [("CIRCLE", (0x00, 0x50, 0xFF))])
+        self.assertEqual(self.wand.results, ["CIRCLE"])
         self.assertEqual(self.wand.state, "IDLE")
         self.assertEqual(self.app.status()["wand_state"], "IDLE")
+
+    def test_the_wand_is_sent_the_label_alone_and_the_page_the_configured_colour(self):
+        sent = []
+        send = self.wand.send
+        self.wand.send = lambda data: sent.append(bytes(data)) or send(data)
+        self.wand.cast("CIRCLE")
+        [result] = self.published("result")
+        self.assertEqual(sent, [bytes.fromhex("83 43 49 52 43 4c 45")])  # GESTURE_RESULT("CIRCLE")
+        self.assertEqual(result["color"], DEFAULT_CONFIG["gestures"]["CIRCLE"]["color"])
 
     def test_every_gesture_is_recognized(self):
         for gesture in GESTURES:
@@ -72,12 +81,13 @@ class ControllerTest(unittest.TestCase):
                 [result] = self.published("result")
                 self.assertEqual(result["label"], gesture)
 
-    def test_casual_movement_is_unknown_flashes_red_and_runs_no_action(self):
+    def test_casual_movement_is_unknown_shown_in_the_unknown_colour_and_runs_no_action(self):
         for _ in range(5):
             self.wand.cast("WOBBLE")
-        labels = [r["label"] for r in self.published("result")]
-        self.assertEqual(labels, ["UNKNOWN"] * 5)
-        self.assertEqual({rgb for _, rgb in self.wand.feedback_log}, {(255, 0, 0)})
+        results = self.published("result")
+        self.assertEqual([r["label"] for r in results], ["UNKNOWN"] * 5)
+        self.assertEqual({r["color"] for r in results}, {DEFAULT_CONFIG["unknown_color"]})
+        self.assertEqual(self.wand.results, ["UNKNOWN"] * 5)
         self.assertEqual(self.published("action"), [])
         self.assertEqual(self.notifications, [])
 

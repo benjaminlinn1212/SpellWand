@@ -1,6 +1,5 @@
 {# The Help panel, on every page: how to use Grimoire, in short. It opens from the ? in the top
-   bar (static/shared.js). The wand's light colours are the firmware's
-   (firmware/lib/wand_core/wand_state.h); keep them in step. #}
+   bar (static/shared.js). #}
 <aside id="help-drawer" class="drawer" aria-labelledby="help-heading" hidden>
   <div class="drawer-head">
     <h2 id="help-heading">Help</h2>
@@ -18,15 +17,7 @@
     <section>
       <h3 class="section-title">Casting</h3>
       <p>Hold the cast button, draw a gesture in the air, and let go. A cast lasts at most 3 seconds. The 3D view draws the path of the wand's tip as you move, seen from behind your hand.</p>
-      <p>The wand's light tells you where it is:</p>
-      <ul class="lights">
-        <li><span class="light idle"></span>Dim white: ready</li>
-        <li><span class="light casting"></span>Blue: casting</li>
-        <li><span class="light inflight"></span>Amber: waiting for the Mac's answer</li>
-        <li><span class="light recognised"></span>The gesture's own colour for a second: recognised</li>
-        <li><span class="light unknown"></span>Three flashes: Unknown, the cast matched no gesture</li>
-        <li><span class="light no-answer"></span>Two magenta flashes: no answer from the Mac</li>
-      </ul>
+      <p>The status at the right of the top bar says where the wand is: ready, casting, or waiting for the Mac's answer. It is ready for the next cast as soon as the answer arrives.</p>
     </section>
 
     <section>
@@ -44,7 +35,7 @@
     <section>
       <h3 class="section-title">Settings</h3>
       <p>The <b>rejection threshold</b> is how far a cast may be from its nearest example and still count. Lower is stricter: fewer wrong answers, more Unknown.</p>
-      <p>Each gesture's square is the colour the wand flashes for it. Its menu is what the Mac does: show a notification, send a web request, or switch something in the living room. Add a gesture by its name, then record examples of it. <b>Save settings</b> to apply.</p>
+      <p>Each gesture's square is the colour the app shows it in: its trail in the 3D view, and the block behind its name under Last cast. Its menu is what the Mac does: show a notification, send a web request, or switch something in the living room. Add a gesture by its name, then record examples of it. <b>Save settings</b> to apply.</p>
     </section>
 
     <section>

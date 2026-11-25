@@ -50,12 +50,12 @@ for press in range(1, TARGET + 1):
         if text.startswith("CAST_START"):
             starts += 1
             pressed_at = time.time()
-            print("   pressed: LED should be BLUE", flush=True)
+            print("   pressed", flush=True)
         elif text.startswith("CAST_END"):
             ends += 1
             held = time.time() - (pressed_at or time.time())
             holds.append(held)
-            print(f"   let go after {held:.1f} s: AMBER, then 2 MAGENTA flashes", flush=True)
+            print(f"   let go after {held:.1f} s (the wand waits up to 2 s for a result before the next press)", flush=True)
         elif text == "State: IDLE" and ends:
             break
     else:

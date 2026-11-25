@@ -4,8 +4,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "rgb.h"
-
 namespace protocol {
 
 // Message types (first byte)
@@ -27,10 +25,6 @@ const uint8_t END_NORMAL = 0;  // button released, or STOP_RECORDING
 const uint8_t END_MAX_DURATION = 1;
 const uint8_t END_CONNECTION_LOST = 2;
 
-// EXECUTE_ACTION actions
-const uint8_t ACTION_TOGGLE_LED = 1;
-const uint8_t ACTION_PULSE_LED = 2;
-
 const size_t MAX_MESSAGE_BYTES = 20;
 const size_t MAX_LABEL_LENGTH = 16;
 
@@ -51,7 +45,6 @@ size_t encodeActionComplete(uint8_t* out, uint8_t action, bool ok);
 
 struct Command {
   uint8_t type;
-  Rgb color;                         // GESTURE_RESULT: spell colour from the Mac's config.json
   char label[MAX_LABEL_LENGTH + 1];  // GESTURE_RESULT, null-terminated
   uint8_t action;                    // EXECUTE_ACTION
 };

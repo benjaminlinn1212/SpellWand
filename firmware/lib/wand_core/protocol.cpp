@@ -70,10 +70,9 @@ bool decodeCommand(const uint8_t* data, size_t length, Command& out) {
     case STOP_RECORDING:
       return length == 1;
     case GESTURE_RESULT: {
-      size_t labelLength = length >= 5 ? length - 4 : 0;
+      size_t labelLength = length - 1;  // everything after the type byte
       if (labelLength < 1 || labelLength > MAX_LABEL_LENGTH) return false;
-      out.color = Rgb{data[1], data[2], data[3]};
-      memcpy(out.label, data + 4, labelLength);
+      memcpy(out.label, data + 1, labelLength);
       out.label[labelLength] = '\0';
       return true;
     }

@@ -46,10 +46,6 @@ def run_in_thread(task):
     threading.Thread(target=task, daemon=True).start()
 
 
-def hex_to_rgb(colour):
-    return tuple(int(colour[i:i + 2], 16) for i in (1, 3, 5))
-
-
 def _finite(value):
     """JSON has no infinity; send None instead."""
     return None if value is None or math.isinf(value) else round(float(value), 4)
@@ -311,12 +307,12 @@ class SpellWandController:
             result = self.classifier.classify(sequence)
             config = self.config
         gesture = config["gestures"].get(result.label)
-        colour = gesture["color"] if gesture else config["unknown_color"]
+        colour = gesture["color"] if gesture else config["unknown_color"]  # for the page only, not the wand
         try:
-            self._send(encode_gesture_result(result.label, hex_to_rgb(colour)))
+            self._send(encode_gesture_result(result.label))
             response_ms = round((time.perf_counter() - received) * 1000, 1)
         except ConnectionError:
-            response_ms = None  # the wand will time out and flash "no answer"
+            response_ms = None  # the wand stops waiting after 2 s and returns to IDLE
         with self._lock:
             self._wand_state = "IDLE"
             self._history.appendleft({"label": result.label, "distance": _finite(result.distance)})

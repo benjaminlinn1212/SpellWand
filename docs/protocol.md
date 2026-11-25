@@ -38,7 +38,7 @@ y points left and z points up when the wand is held level. The firmware converts
 |---|---|---|---|
 | `0x81` | `START_RECORDING` | none | 1 |
 | `0x82` | `STOP_RECORDING` | none | 1 |
-| `0x83` | `GESTURE_RESULT` | r g b `u8`: the spell colour, shown exactly as sent; then the `GestureLabel` in ASCII, 1–16 characters | 5–20 |
+| `0x83` | `GESTURE_RESULT` | the `GestureLabel` in ASCII, 1–16 characters | 2–17 |
 | `0x84` | `EXECUTE_ACTION` | *Reserved* for a future output on the wand (e.g. a vibration motor): action `u8`. The current wand has no outputs and always replies `ACTION_COMPLETE(ok=0)` | 2 |
 
 ## Typical exchanges
@@ -46,20 +46,20 @@ y points left and z points up when the wand is held level. The firmware converts
 Casting (button):
 
 ```
-ESP32: CAST_START(source=0)            state IDLE -> CASTING, LED blue
+ESP32: CAST_START(source=0)            state IDLE -> CASTING
 ESP32: MOTION_SAMPLE x N (about 100 Hz)
-ESP32: CAST_END(count=N, reason=0)     state CASTING -> INFLIGHT, LED amber
-Mac:   GESTURE_RESULT(colour, "CIRCLE")  LED shows that colour (three flashes of it for UNKNOWN)
-                                       state INFLIGHT -> IDLE after the feedback
+ESP32: CAST_END(count=N, reason=0)     state CASTING -> INFLIGHT
+Mac:   GESTURE_RESULT("CIRCLE")        state INFLIGHT -> IDLE
 ```
 
 The gesture's action (a Mac notification or a web request) then runs on the Mac; the wand isn't involved.
 
 **Spell colours have one home: the Mac's `config.json`** (edited in the SpellWand UI, including the
-colour for `UNKNOWN`). The wand has no spell colours of its own; it only owns the colours of its states
-(dim white `IDLE`, blue `CASTING`, amber `INFLIGHT`, magenta "no answer") and the flash pattern.
+colour for `UNKNOWN`). Only the app uses them, to colour its own display, such as the 3D trail, the last
+cast and the Living room. The wand never receives them.
 
-If no `GESTURE_RESULT` arrives within 2 s, the wand flashes magenta ("no answer") and returns to `IDLE`.
+If no `GESTURE_RESULT` arrives within 2 s, the wand returns to `IDLE`. A `GESTURE_RESULT` that arrives
+later, or while the wand isn't waiting for one, is ignored.
 
 Training (no button needed):
 
@@ -81,5 +81,5 @@ ESP32: CAST_END(count=N, reason=0)     state CASTING -> IDLE (nothing to classif
 | `ACTION_COMPLETE(action=2, ok=1)` | `04 02 01` |
 | `START_RECORDING` | `81` |
 | `STOP_RECORDING` | `82` |
-| `GESTURE_RESULT(rgb=(0, 80, 255), "CIRCLE")` | `83 00 50 ff 43 49 52 43 4c 45` |
+| `GESTURE_RESULT("CIRCLE")` | `83 43 49 52 43 4c 45` |
 | `EXECUTE_ACTION(action=1)` | `84 01` |

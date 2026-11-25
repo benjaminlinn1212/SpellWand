@@ -32,11 +32,7 @@ END_NORMAL = 0          # button released, or STOP_RECORDING
 END_MAX_DURATION = 1
 END_CONNECTION_LOST = 2
 
-# EXECUTE_ACTION actions
-ACTION_TOGGLE_LED = 1
-ACTION_PULSE_LED = 2
-
-MAX_MESSAGE_BYTES = 20
+MAX_MESSAGE_BYTES = 20       # every message fits in one BLE packet
 MAX_LABEL_LENGTH = 16
 ACCEL_STEPS_PER_UNIT = 100   # 0.01 m/s^2
 GYRO_STEPS_PER_UNIT = 1000   # 0.001 rad/s
@@ -95,7 +91,6 @@ class StopRecording:
 @dataclass(frozen=True)
 class GestureResult:
     label: str
-    rgb: tuple
 
 
 @dataclass(frozen=True)
@@ -129,10 +124,10 @@ def encode_stop_recording():
     return bytes([STOP_RECORDING])
 
 
-def encode_gesture_result(label, rgb):
+def encode_gesture_result(label):
     if not label or len(label) > MAX_LABEL_LENGTH or not label.isascii():
         raise ValueError(f"label must be 1-{MAX_LABEL_LENGTH} ASCII characters, got {label!r}")
-    return bytes([GESTURE_RESULT, *rgb]) + label.encode("ascii")
+    return bytes([GESTURE_RESULT]) + label.encode("ascii")
 
 
 def encode_execute_action(action):
@@ -173,13 +168,13 @@ def decode_command(data):
         _expect_length(data, 1)
         return StopRecording()
     if kind == GESTURE_RESULT:
-        if not 5 <= len(data) <= MAX_MESSAGE_BYTES:
-            raise ProtocolError(f"GESTURE_RESULT must be 5-{MAX_MESSAGE_BYTES} bytes, got {len(data)}")
+        if not 2 <= len(data) <= 1 + MAX_LABEL_LENGTH:
+            raise ProtocolError(f"GESTURE_RESULT must be 2-{1 + MAX_LABEL_LENGTH} bytes, got {len(data)}")
         try:
-            label = data[4:].decode("ascii")
+            label = data[1:].decode("ascii")
         except UnicodeDecodeError as error:
             raise ProtocolError("GESTURE_RESULT label is not ASCII") from error
-        return GestureResult(label=label, rgb=(data[1], data[2], data[3]))
+        return GestureResult(label=label)
     if kind == EXECUTE_ACTION:
         _expect_length(data, 2)
         return ExecuteAction(action=data[1])

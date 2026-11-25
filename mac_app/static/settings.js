@@ -1,13 +1,13 @@
 // The Settings panel (templates/_settings.html), on every page: the rejection threshold, and each
-// gesture's LED colour and action. It loads the settings from app.py, and saves them back.
+// gesture's colour and action. It loads the settings from app.py, and saves them back.
 // After a save it tells the page, so the page can follow: an event "spellwand:config" on window,
 // with the new settings as its detail.
 // Everything is inside Settings, so the page scripts' own names ($, el, ...) do not clash.
 
 const Settings = (() => {
-  const NEW_GESTURE_COLOR = "#b48cff";  // the LED colour a newly added gesture starts with
-  // Colours the wand's RGB LED shows well, for the colour chooser.
-  const LED_COLORS = [
+  const NEW_GESTURE_COLOR = "#b48cff";  // the colour a newly added gesture starts with
+  // The colour chooser's preset colours.
+  const PRESET_COLORS = [
     "#ff0000", "#ff4000", "#ffaa00", "#ffe600", "#00c828", "#00d6a0",
     "#00b4ff", "#0050ff", "#7a3cff", "#d028ff", "#ff2d8a", "#ffffff",
   ];
@@ -39,7 +39,7 @@ const Settings = (() => {
 
   // ---------- colour chooser ----------
   // A colour square is a button that holds its colour as its value. Pressing it opens one small
-  // panel under it: the colours the wand's LED shows well, and a field for any other colour.
+  // panel under it: the preset colours, and a field for any other colour.
 
   const colors = { box: null, hex: null, target: null };
 
@@ -57,7 +57,7 @@ const Settings = (() => {
   }
 
   function buildColors() {
-    const presets = LED_COLORS.map((color) => {
+    const presets = PRESET_COLORS.map((color) => {
       const choice = el("button", { type: "button", className: "swatch-button", title: color, "aria-label": color });
       setSwatch(choice, color);
       choice.addEventListener("click", () => {

@@ -3,8 +3,8 @@
    `status`, so the bar arrives showing the current connection. static/shared.js keeps it up
    to date. #}
 {% set connected = status.connected %}
-{# The wand in one phrase, with a dot: hollow with no wand, green when ready, and while busy the
-   colour the wand's own light shows (blue casting, amber waiting). static/shared.js says the same. #}
+{# The wand in one phrase, with a dot: hollow with no wand, green when ready, blue casting, amber
+   waiting for the Mac (style.css). static/shared.js says the same. #}
 {% set who = "Simulated wand" if status.mode == "simulated" else "Wand" %}
 {% if not connected %}{% set dot, phrase = "", "No wand connected" %}
 {% elif status.recording %}{% set dot, phrase = "casting", "Recording " ~ (status.recording | replace("_", " ") | capitalize) %}
