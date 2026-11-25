@@ -6,8 +6,9 @@
    orientation, then what an IMU riding at the tip would read:
      gyroscope     = how much the orientation turned since the previous moment
      accelerometer = the tip's acceleration + gravity, both seen in the wand's own axes
-   Every call adds random variation: size, duration, uneven pacing, the tilt of the
-   whole gesture, timing jitter and sensor noise. Real recordings will be messier.
+   Every call adds random variation: size, duration, uneven pacing, the shape drawn a
+   little above or below level, the wand twisted in the hand, timing jitter and sensor
+   noise. Real recordings will be messier.
 
 2. SimulatedWand: behaves like the ESP32 firmware over BLE_LINK (same states, same
    message bytes), so the whole Mac app can run without hardware.
@@ -125,8 +126,12 @@ def make_gesture(gesture, rng):
     left, up = (size * p for p in _tip_path(gesture, s))
 
     # Wand orientation at each moment: turn left/right toward the target, then tip up/down.
-    tilt = _random_tilt(rng)
-    orientations = [tilt @ _rot_z(np.arctan2(y, WAND_LENGTH_M)) @ _rot_y(-np.arctan2(z, np.hypot(WAND_LENGTH_M, y)))
+    # The shape is drawn in the room, up to 20 degrees above or below level, while the wand
+    # is twisted in the hand (about its own long axis) by up to 20 degrees either way. The
+    # twist turns the wand's axes, and so its readings, but not the shape it draws.
+    pitch, roll = np.radians(rng.uniform(-20, 20, 2))
+    orientations = [_rot_y(pitch) @ _rot_z(np.arctan2(y, WAND_LENGTH_M))
+                    @ _rot_y(-np.arctan2(z, np.hypot(WAND_LENGTH_M, y))) @ _rot_x(roll)
                     for y, z in zip(left, up)]
 
     tip = np.array([r @ [WAND_LENGTH_M, 0.0, 0.0] for r in orientations])

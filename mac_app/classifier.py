@@ -18,6 +18,8 @@ TRIM_FRACTION = 0.1        # trim start/end where rotation is under 10 % of the 
 STILL_FLOOR_RAD_S = 0.2    # ...or under this, whichever is larger (sensor noise is far below it)
 ACCEL_UNIT = 9.81          # m/s^2 per g
 GYRO_UNIT = np.pi          # rad/s per half-turn-per-second
+ROLL_MIN_SIDEWAYS = 0.25   # gravity's part across the wand, as a fraction of all of it, needed to
+                           # read the roll: below it the tip is within about 15 deg of straight up/down
 
 
 @dataclass
@@ -122,19 +124,24 @@ def preprocess(sequence, length=RESAMPLE_LENGTH):
        wand happened to be tilted, and as the wand turns it shifts between the axes,
        which would make the same gesture look different at different tilts. We know
        which way is down at each moment by following the gyro (see motion_trace.py).
-    2. Cut off the still time at the start and end (see active_span), e.g. the
+    2. Undo the roll: turn every reading about the wand's long axis as if the wand had
+       been held level, not twisted in the hand, when the cast began (see level_the_roll).
+       Otherwise the same gesture made with the wand rolled lands on different axes.
+    3. Cut off the still time at the start and end (see active_span), e.g. the
        pause after pressing Start recording.
-    3. Resample onto `length` evenly spaced moments between the first and last
+    4. Resample onto `length` evenly spaced moments between the first and last
        remaining timestamp, so fast and slow casts line up point by point.
-    4. Convert to g and half-turns per second, where a typical gesture is about the
+    5. Convert to g and half-turns per second, where a typical gesture is about the
        same size on both sensors, so neither one drowns out the other.
-    5. Scale the whole gesture to overall size 1, so big and small, fast and slow
+    6. Scale the whole gesture to overall size 1, so big and small, fast and slow
        versions of the same gesture match. (This is why wand_moved() is needed:
        scaling would blow a tiny twitch up into a full-size shape.)
     """
     t = np.asarray(sequence.t_ms, dtype=float)
     imu = np.array(sequence.imu, dtype=float)  # a copy, so the caller's data is untouched
-    imu[:, 0:3] -= gravity_in_wand(sequence)  # uses the whole recording: still parts show gravity best
+    gravity = gravity_in_wand(sequence)  # uses the whole recording: still parts show gravity best
+    imu[:, 0:3] -= gravity
+    imu = level_the_roll(imu, gravity[0])
     start, end = active_span(sequence)
     new_t = np.linspace(start, end, length)
     resampled = np.column_stack([np.interp(new_t, t, imu[:, k]) for k in range(imu.shape[1])])
@@ -142,6 +149,29 @@ def preprocess(sequence, length=RESAMPLE_LENGTH):
     resampled[:, 3:6] /= GYRO_UNIT
     size = _rms(resampled)
     return resampled / size if size > 0 else resampled
+
+
+def level_the_roll(imu, up):
+    """Turn readings (N x 6: accelerometer, gyro, in the wand's axes) about the wand's long
+    (x) axis, by the amount that brings `up` onto the wand's z axis. `up` is gravity's
+    reading at the start of the cast, so afterwards the readings are those of the same
+    motion made with the wand held level: y is left and z is up in the room again, and only
+    the twist the gesture itself makes is left.
+
+    When the tip points almost straight up or down, gravity lies along the wand and its
+    roll can't be read, so the readings are returned as they are.
+    """
+    up = np.asarray(up, dtype=float)
+    sideways = math.hypot(up[1], up[2])
+    if sideways == 0.0 or sideways < ROLL_MIN_SIDEWAYS * np.linalg.norm(up):
+        return imu
+    roll = math.atan2(up[1], up[2])  # how far the wand is turned from level about x
+    c, s = math.cos(roll), math.sin(roll)
+    leveled = np.array(imu, dtype=float)
+    for y, z in ((1, 2), (4, 5)):  # accelerometer y, z, then gyro y, z
+        leveled[:, y] = c * imu[:, y] - s * imu[:, z]
+        leveled[:, z] = s * imu[:, y] + c * imu[:, z]
+    return leveled
 
 
 def active_span(sequence):

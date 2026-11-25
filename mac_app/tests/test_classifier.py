@@ -8,7 +8,8 @@ import unittest
 
 import numpy as np
 
-from classifier import UNKNOWN, GestureClassifier, GestureSequence, dtw_distance, leave_one_out
+from classifier import UNKNOWN, GestureClassifier, GestureSequence, dtw_distance, leave_one_out, level_the_roll
+from motion_trace import _rotation
 from simulator import GESTURES, casual_movement, make_gesture
 
 N_SAMPLES = 40
@@ -26,6 +27,37 @@ def gyro_sequence(gx=0.0, gy=0.0, gz=0.0, label=None, duration_ms=1000):
     imu[:, 3], imu[:, 4], imu[:, 5] = gx, gy, gz
     t_ms = np.linspace(0, duration_ms, len(gx))
     return GestureSequence(t_ms=t_ms, imu=imu, label=label)
+
+
+def turn(axis, degrees):
+    """Rotation matrix for turning `degrees` about the x, y or z axis (right-hand rule)."""
+    a = math.radians(degrees)
+    c, s = math.cos(a), math.sin(a)
+    i, j = {"x": (1, 2), "y": (2, 0), "z": (0, 1)}[axis]
+    r = np.eye(3)
+    r[i, i], r[i, j], r[j, i], r[j, j] = c, -s, s, c
+    return r
+
+
+def swing_seen_by(start, axis_in_world, amplitude=1.5, n=N_SAMPLES):
+    """A swing about a fixed direction in the room, as measured by a wand that starts out
+    held in orientation `start` (wand axes -> room axes). Room axes: x forward, y left, z up.
+    A swing about z moves the tip sideways; a swing about y moves it up and down.
+    The accelerometer feels only gravity (the swing pivots at the hand)."""
+    t = np.linspace(0.0, 1.0, n)
+    rate = amplitude * np.sin(np.pi * t)                    # rad/s
+    angle = amplitude / np.pi * (1 - np.cos(np.pi * t))     # turned so far, rad
+    axis = np.asarray(axis_in_world, dtype=float)
+    imu = np.zeros((n, 6))
+    for k in range(n):
+        orientation = _rotation(axis * angle[k]) @ start     # wand axes -> room axes now
+        imu[k, 0:3] = orientation.T @ [0.0, 0.0, 9.81]      # gravity, seen in the wand's axes
+        imu[k, 3:6] = orientation.T @ (axis * rate[k])      # the turn, seen in the wand's axes
+    return GestureSequence(t_ms=1000 * t, imu=imu)
+
+
+SIDEWAYS = [0.0, 0.0, 1.0]
+UP_DOWN = [0.0, 1.0, 0.0]
 
 
 def three_axis_examples():
@@ -121,37 +153,20 @@ class PreprocessingTest(unittest.TestCase):
         self.clf = GestureClassifier(threshold=10.0)
         self.clf.fit(three_axis_examples())
 
-    def test_same_swing_with_wand_rolled_30_degrees_still_matches(self):
-        # A sideways swing: the wand turns about its own z axis at gz = A sin(pi t),
-        # so by time t it has turned psi(t) = (A / pi) (1 - cos(pi t)) radians.
-        # The accelerometer only feels gravity (no other push), seen in the wand's axes.
-        # Held level, gravity stays on z. Rolled 30 degrees, gravity swings between the
-        # axes as the wand turns, which must not make it look like a different gesture.
-        amplitude = 1.5
-        t = np.linspace(0.0, 1.0, N_SAMPLES)
-        psi = amplitude / np.pi * (1 - np.cos(np.pi * t))
-        roll = math.radians(30)
-
-        def swing(gravity_in_wand):
-            imu = np.zeros((N_SAMPLES, 6))
-            imu[:, 0:3] = gravity_in_wand
-            imu[:, 5] = amplitude * np.sin(np.pi * t)
-            return GestureSequence(t_ms=1000 * t, imu=imu)
-
-        # Gravity in wand axes = (rotation by roll about x, then psi about z) transposed, times (0, 0, g).
-        level = swing(np.column_stack([np.zeros_like(t), np.zeros_like(t), np.full_like(t, 9.81)]))
+    def test_same_swing_with_the_tip_raised_30_degrees_still_matches(self):
+        # The wand turns about its own z axis. Held level, gravity stays on z. With the tip
+        # raised, gravity swings between the wand's axes as it turns, which must not make it
+        # look like a different gesture: gravity is taken out of every reading.
+        level = swing_seen_by(np.eye(3), SIDEWAYS)
         level.label = "SWING"
-        rolled = swing(9.81 * np.column_stack([
-            math.sin(roll) * np.sin(psi),
-            math.sin(roll) * np.cos(psi),
-            np.full_like(t, math.cos(roll)),
-        ]))
-
+        raised = turn("y", -30)  # turning the tip (x) up toward z
+        tilted = swing_seen_by(raised, raised @ np.array(SIDEWAYS))  # about the wand's own z
         clf = GestureClassifier(threshold=1.0)
         clf.fit([level])
-        result = clf.classify(rolled)
+        result = clf.classify(tilted)
         self.assertEqual(result.label, "SWING")
         self.assertLess(result.distance, 0.01)
+
 
     def test_same_gesture_done_slower_matches_closely(self):
         # Three times as long, three times as many samples, same shape.
@@ -186,6 +201,52 @@ class PreprocessingTest(unittest.TestCase):
             with self.subTest(samples=n):
                 result = self.clf.classify(gyro_sequence(gx=bump(n=n)))
                 self.assertEqual(result.label, UNKNOWN)
+
+
+class RollTest(unittest.TestCase):
+    """Turning the wand in the hand (about its own long axis) must not change the gesture.
+    Up and down in the room still count: an up-down swing is not a sideways swing."""
+
+    def setUp(self):
+        level = np.eye(3)
+        sideways, up_down = swing_seen_by(level, SIDEWAYS), swing_seen_by(level, UP_DOWN)
+        sideways.label, up_down.label = "SIDEWAYS", "UP_DOWN"
+        self.clf = GestureClassifier(threshold=1.0)
+        self.clf.fit([sideways, up_down])
+
+    def test_a_swing_matches_however_far_the_wand_is_rolled(self):
+        for label, axis in (("SIDEWAYS", SIDEWAYS), ("UP_DOWN", UP_DOWN)):
+            for roll in (30, 90, 135, 180, -60):
+                with self.subTest(gesture=label, roll=roll):
+                    result = self.clf.classify(swing_seen_by(turn("x", roll), axis))
+                    self.assertEqual(result.label, label)
+                    self.assertLess(result.distance, 0.01)
+
+    def test_roll_is_found_with_the_tip_raised_or_lowered(self):
+        for pitch in (-45, 45):
+            with self.subTest(pitch=pitch):
+                start = turn("y", pitch) @ turn("x", 90)  # rolled a quarter turn, tip tilted
+                rolled = swing_seen_by(start, SIDEWAYS)
+                level = swing_seen_by(turn("y", pitch), SIDEWAYS)
+                self.assertLess(self.clf.classify(rolled).distance, 0.01 + self.clf.classify(level).distance)
+                self.assertEqual(self.clf.classify(rolled).nearest_label, self.clf.classify(level).nearest_label)
+
+    def test_readings_are_left_as_they_are_when_the_tip_points_almost_straight_up_or_down(self):
+        # Gravity then lies along the wand, so its roll can't be read from it.
+        imu = np.arange(12, dtype=float).reshape(2, 6)
+        for up in ([9.81, 0.5, 0.3], [-9.81, 0.2, -0.6], [0.0, 0.0, 0.0]):
+            with self.subTest(up=up):
+                np.testing.assert_array_equal(level_the_roll(imu, np.array(up)), imu)
+
+    def test_leveling_turns_the_start_s_up_onto_the_wand_s_z_axis(self):
+        up = 9.81 * np.array([0.2, math.sin(math.radians(70)), math.cos(math.radians(70))])
+        imu = np.concatenate([up, [0.0, 1.0, 0.0]])[None, :]
+        leveled = level_the_roll(imu, up)
+        self.assertAlmostEqual(leveled[0, 1], 0.0)                     # no sideways part left
+        self.assertGreater(leveled[0, 2], 0.0)                         # up is up, not down
+        self.assertAlmostEqual(leveled[0, 0], up[0])                   # along the wand: untouched
+        self.assertAlmostEqual(np.linalg.norm(leveled[0, 0:3]), np.linalg.norm(up))
+        self.assertAlmostEqual(np.linalg.norm(leveled[0, 3:6]), 1.0)  # the gyro turns the same way
 
 
 class DatasetCheckTest(unittest.TestCase):
